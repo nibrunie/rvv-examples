@@ -453,6 +453,10 @@ int main(void) {
 
         (ubench_data_t){.bench = bench_lat_rem_values, .data_gen=data_gen_2op_int, .label="data rem benchmark", .index=0 },
 
+        (ubench_data_t){.bench = bench_lat_divu_values, .data_gen=data_gen_2op_int, .label="data divu benchmark", .index=0 },
+
+        (ubench_data_t){.bench = bench_lat_remu_values, .data_gen=data_gen_2op_int, .label="data remu benchmark", .index=0 },
+
         (ubench_data_t){.bench = bench_lat_fdiv_d_values, .data_gen=data_gen_2op_fp64, .label="data fdiv benchmark", .index=0 },
 
         (ubench_data_t){.bench = bench_lat_fdiv_s_values, .data_gen=data_gen_2op_fp32, .label="data fdiv benchmark", .index=0 },
