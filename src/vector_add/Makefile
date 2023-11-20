@@ -3,16 +3,16 @@
 # RISC-V C Compiler
 # available options (the version used must support RVV intrinsics)
 # clang/llvm
-RISCVCC=clang  --target=riscv64
+# RISCVCC=clang  --target=riscv64
 # GNU Compiler Collection (GCC)
-# RISCVCC=riscv64-unknown-elf-gcc 
+RISCVCC=riscv64-unknown-elf-gcc 
 
 # architectural parameters for the simulation
 # width of vector registers (VLEN)
 VLEN?=128
 
 # path to proxy-kernel (pk)
-PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk 
+PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk64 
 
 # SIMULATOR
 # Available options in the Docker (uncomment one)
@@ -25,7 +25,7 @@ vector_add_intrinsics.o: vector_add_intrinsics.c
 bench_vector_add: bench_vector_add.c vector_add_intrinsics.o
 	 $(RISCVCC) -O2 -march=rv64gcv $^ -o $@
 
-sim_bench_vector_add: bench-0_vector_add
+sim_bench_vector_add: bench_vector_add
 	$(SIMULATOR) $^
 
 clean:
