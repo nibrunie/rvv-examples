@@ -1,3 +1,4 @@
+// source: https://github.com/XKCP/XKCP/blob/master/Standalone/CompactFIPS202/C/Keccak-more-compact.c
 #define FOR(i,n) for(i=0; i<n; ++i)
 typedef unsigned char u8;
 typedef unsigned long long int u64;
