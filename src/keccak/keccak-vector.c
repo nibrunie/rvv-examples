@@ -239,6 +239,16 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
 
         // state as a 5x5 matrix A[x, y] is stored with a column-major layout:
         // A[0,0]-A[1,0]-A[2,0]-A[3,0]-A[4,0] are contiguous in memory
+        /* Compute the parity of the columns */
+        /*
+        tKeccakLane C_baseline[5];
+        for(x=0; x<5; x++)
+            C_baseline[x] = readLane(x, 0) ^ readLane(x, 1) ^ readLane(x, 2) ^ readLane(x, 3) ^ readLane(x, 4);
+        //for(x=0; x<5; x++) {
+        //    printf("C[%d]=%"PRIx64" vs C_rvv[%d]=%"PRIx64"\n", x, C[x], x, C_rvv[x]);
+        //}
+        // assert(!memcmp(C, C_baseline, 40));
+        */
         /*
         vuint64m1x5_t rows_0 = __riscv_vlseg5e64_v_u64m1x5((uint64_t*)state, 2);
         vuint64m1_t row0_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 0);
@@ -281,24 +291,49 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
         vuint64m4_t C_vector = __riscv_vxor_vv_u64m4(C_23, C_014, 5);
 
         __riscv_vse64_v_u64m4(C, C_vector, 5);
+        /* Compute the θ effect for all the columns */
+        uint64_t C_0 = __riscv_vmv_x_s_u64m4_u64(C_vector);
+        vuint64m4_t C_4_ext = __riscv_vslidedown_vx_u64m4(C_vector, 4, 1);   // {C[4]}
+        vuint64m4_t D_opLo = __riscv_vslide1down_vx_u64m4(C_vector, C_0, 5); // {C[1], C[2], C[3], C[4], C[0]}
+        vuint64m4_t D_opHi = __riscv_vslide1up_vx_u64m4(C_vector, 0, 5);     // {0,    C[0], C[1], C[2], C[3]}
+        D_opHi = __riscv_vxor_vv_u64m4_tu(D_opHi, D_opHi, C_4_ext, 1);
 
-        /* Compute the parity of the columns */
-        /*
-        tKeccakLane C_baseline[5];
-        for(x=0; x<5; x++)
-            C_baseline[x] = readLane(x, 0) ^ readLane(x, 1) ^ readLane(x, 2) ^ readLane(x, 3) ^ readLane(x, 4);
-        //for(x=0; x<5; x++) {
-        //    printf("C[%d]=%"PRIx64" vs C_rvv[%d]=%"PRIx64"\n", x, C[x], x, C_rvv[x]);
-        //}
-        // assert(!memcmp(C, C_baseline, 40));
-        */
+        // FIXME: intrinsics for vrol, currently not available in Docker's CLANG version 
+        // D_opLo = __riscv_vrol_vx_u64m4(D_opLo, 1, 5);
+        D_opLo = __riscv_vor_vv_u64m4(__riscv_vsll_vx_u64m4(D_opLo, 1,  5),
+                                      __riscv_vsrl_vx_u64m4(D_opLo, 63, 5),
+                                      5);
+        vuint64m4_t D_rvv = __riscv_vxor_vv_u64m4(D_opLo, D_opHi, 5);
+        tKeccakLane D_new[5];
+        __riscv_vse64_v_u64m4(D_new, D_rvv, 5);
+        
+        /* Apply the θ effect */
+        row0 = __riscv_vxor_vv_u64m4(row0, D_rvv, 5);
+        row1 = __riscv_vxor_vv_u64m4(row1, D_rvv, 5);
+        row2 = __riscv_vxor_vv_u64m4(row2, D_rvv, 5);
+        row3 = __riscv_vxor_vv_u64m4(row3, D_rvv, 5);
+        row4 = __riscv_vxor_vv_u64m4(row4, D_rvv, 5);
+
+        __riscv_vse64_v_u64m4((uint64_t*)state,       row0, 5);
+        __riscv_vse64_v_u64m4((uint64_t*)state + 5,  row1, 5);
+        __riscv_vse64_v_u64m4((uint64_t*)state + 10,  row2, 5);
+        __riscv_vse64_v_u64m4((uint64_t*)state + 15, row3, 5);
+        __riscv_vse64_v_u64m4((uint64_t*)state + 20, row4, 5);
+
+#if     0
         for(x=0; x<5; x++) {
             /* Compute the θ effect for a given column */
             D = C[(x+4)%5] ^ ROL64(C[(x+1)%5], 1);
+            if (D != D_new[x]) {
+                printf("D[%d] = %"PRIx64" vs D_new[%d]=%"PRIx64"\n", x, D, x, D_new[x]);
+                assert(0);
+            }
             /* Add the θ effect to the whole column */
             for (y=0; y<5; y++)
                 XORLane(x, y, D);
         }
+        assert(!memcmp(state, state_new, 200)); // , "state comparison after theta step");
+#       endif
     }
 
     {   /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
