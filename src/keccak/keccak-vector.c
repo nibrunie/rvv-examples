@@ -244,6 +244,34 @@ vuint64m4_t __riscv_vrol_vv_u64m4(vuint64m4_t data, vuint64m4_t rots, size_t vl)
     return res;
 }
 
+// round constants for ι step
+const uint64_t RC[25] = {
+    0x0000000000000001, // RC[0]	
+    0x0000000000008082, // RC[1]	
+    0x800000000000808A, // RC[2]	
+    0x8000000080008000, // RC[3]	
+    0x000000000000808B, // RC[4]	
+    0x0000000080000001, // RC[5]	
+    0x8000000080008081, // RC[6]	
+    0x8000000000008009, // RC[7]	
+    0x000000000000008A, // RC[8]	
+    0x0000000000000088, // RC[9]	
+    0x0000000080008009, // RC[10]
+    0x000000008000000A, // RC[11]
+    0x000000008000808B, // RC[12]
+    0x800000000000008B, // RC[13]
+    0x8000000000008089, // RC[14]
+    0x8000000000008003, // RC[15]
+    0x8000000000008002, // RC[16]
+    0x8000000000000080, // RC[17]
+    0x000000000000800A, // RC[18]
+    0x800000008000000A, // RC[19]
+    0x8000000080008081, // RC[20]
+    0x8000000000008080, // RC[21] 
+    0x0000000080000001, // RC[22]
+    0x8000000080008008, // RC[23]
+};
+
 /**
  * Function that computes the Keccak-f[1600] permutation on the given state.
  * original from: https://github.com/XKCP/XKCP/blob/master/Standalone/CompactFIPS202/C/Keccak-readable-and-compact.c
@@ -254,51 +282,6 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
     {   /* === θ step (see [Keccak Reference, Section 2.3.2]) === */
         tKeccakLane C[5], D;
 
-        // state as a 5x5 matrix A[x, y] is stored with a column-major layout:
-        // A[0,0]-A[1,0]-A[2,0]-A[3,0]-A[4,0] are contiguous in memory
-        /* Compute the parity of the columns */
-        /*
-        tKeccakLane C_baseline[5];
-        for(x=0; x<5; x++)
-            C_baseline[x] = readLane(x, 0) ^ readLane(x, 1) ^ readLane(x, 2) ^ readLane(x, 3) ^ readLane(x, 4);
-        //for(x=0; x<5; x++) {
-        //    printf("C[%d]=%"PRIx64" vs C_rvv[%d]=%"PRIx64"\n", x, C[x], x, C_rvv[x]);
-        //}
-        // assert(!memcmp(C, C_baseline, 40));
-        */
-        /*
-        vuint64m1x5_t rows_0 = __riscv_vlseg5e64_v_u64m1x5((uint64_t*)state, 2);
-        vuint64m1_t row0_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 0);
-        vuint64m1_t row1_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 1);
-        vuint64m1_t row2_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 2);
-        vuint64m1_t row3_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 3);
-        vuint64m1_t row4_0 = __riscv_vget_v_u64m1x5_u64m1(rows_0, 4);
-
-        vuint64m1x5_t rows_1 = __riscv_vlseg5e64_v_u64m1x5(((uint64_t*)state) + 10, 2);
-        vuint64m1_t row0_1 = __riscv_vget_v_u64m1x5_u64m1(rows_1, 0);
-        vuint64m1_t row1_1 = __riscv_vget_v_u64m1x5_u64m1(rows_1, 1);
-        vuint64m1_t row2_1 = __riscv_vget_v_u64m1x5_u64m1(rows_1, 2);
-        vuint64m1_t row3_1 = __riscv_vget_v_u64m1x5_u64m1(rows_1, 3);
-        vuint64m1_t row4_1 = __riscv_vget_v_u64m1x5_u64m1(rows_1, 4);
-
-        vuint64m1x5_t rows_2 = __riscv_vlseg5e64_v_u64m1x5(((uint64_t*)state) + 20, 1);
-        vuint64m1_t row0_2 = __riscv_vget_v_u64m1x5_u64m1(rows_2, 0);
-        vuint64m1_t row1_2 = __riscv_vget_v_u64m1x5_u64m1(rows_2, 1);
-        vuint64m1_t row2_2 = __riscv_vget_v_u64m1x5_u64m1(rows_2, 2);
-        vuint64m1_t row3_2 = __riscv_vget_v_u64m1x5_u64m1(rows_2, 3);
-        vuint64m1_t row4_2 = __riscv_vget_v_u64m1x5_u64m1(rows_2, 4);
-
- 
-        vuint64m1_t zero_u64m1 = __riscv_vundefined_u64m1();
-        vuint64m4_t row0 = __riscv_vcreate_v_u64m1_u64m4(row0_0, row0_1, row0_2, zero_u64m1);
-        vuint64m4_t row1 = __riscv_vcreate_v_u64m1_u64m4(row1_0, row1_1, row1_2, zero_u64m1);
-        vuint64m4_t row2 = __riscv_vcreate_v_u64m1_u64m4(row2_0, row2_1, row2_2, zero_u64m1);
-        vuint64m4_t row3 = __riscv_vcreate_v_u64m1_u64m4(row3_0, row3_1, row3_2, zero_u64m1);
-        vuint64m4_t row4 = __riscv_vcreate_v_u64m1_u64m4(row4_0, row4_1, row4_2, zero_u64m1);
-        */
-       {
-
-       }
        vuint64m4_t row0 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 0, 5);
        vuint64m4_t row1 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 5, 5);
        vuint64m4_t row2 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 10, 5);
@@ -340,20 +323,6 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
         __riscv_vse64_v_u64m4((uint64_t*)state + 15, row3, 5);
         __riscv_vse64_v_u64m4((uint64_t*)state + 20, row4, 5);
 
-#if     0
-        for(x=0; x<5; x++) {
-            /* Compute the θ effect for a given column */
-            D = C[(x+4)%5] ^ ROL64(C[(x+1)%5], 1);
-            if (D != D_new[x]) {
-                printf("D[%d] = %"PRIx64" vs D_new[%d]=%"PRIx64"\n", x, D, x, D_new[x]);
-                assert(0);
-            }
-            /* Add the θ effect to the whole column */
-            for (y=0; y<5; y++)
-                XORLane(x, y, D);
-        }
-        assert(!memcmp(state, state_new, 200)); // , "state comparison after theta step");
-#       endif
     }
 
     /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
@@ -395,29 +364,8 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
     // FIXME: to be optimized
     memcpy(state, B_rotated_rvv, 200);
 
-#if 0
-    {   /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
-        tKeccakLane current, temp;
-        /* Start at coordinates (1 0) */
-        x = 1; y = 0;
-        current = readLane(x, y);
-        /* Iterate over ((0 1)(2 3))^t * (1 0) for 0 ≤ t ≤ 23 */
-        for(t=0; t<24; t++) {
-            /* Compute the rotation constant r = (t+1)(t+2)/2 */
-            unsigned int r = ((t+1)*(t+2)/2)%64;
-            /* Compute ((0 1)(2 3)) * (x y) */
-            unsigned int Y = (2*x+3*y)%5; x = y; y = Y;
-            /* Swap current and state(x,y), and rotate */
-            temp = readLane(x, y);
-            writeLane(x, y, ROL64(current, r));
-            current = temp;
-        }
-    }
-    assert(!memcmp(state, B_rotated_rvv, 200));
-#endif
     /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
-    tKeccakLane chi_steps[25];
-    if (1) {
+    {
         unsigned rowId;
         for (rowId = 0; rowId < 5; rowId++) {
             vuint64m4_t row = __riscv_vle64_v_u64m4(((uint64_t*)state) + rowId * 5, 5);
@@ -432,25 +380,14 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
                                         __riscv_vand_vv_u64m4( __riscv_vnot_v_u64m4(row_xp1, 5), row_xp2, 5),
                                         5);
 
-            __riscv_vse64_v_u64m4((uint64_t*)chi_steps + rowId * 5, row, 5);
+            /* === ι step (see [Keccak Reference, Section 2.3.5]) === */
+            if (rowId == 0) row = __riscv_vxor_vx_u64m4_tu(row, row, RC[round], 1);
+            __riscv_vse64_v_u64m4((uint64_t*)state + rowId * 5, row, 5);
         }
 
     }
-#if 1
-    {   /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
-        tKeccakLane temp[5];
-        for(y=0; y<5; y++) {
-            /* Take a copy of the plane */
-            for(x=0; x<5; x++)
-                temp[x] = readLane(x, y);
-            /* Compute χ on the plane */
-            for(x=0; x<5; x++)
-                writeLane(x, y, temp[x] ^((~temp[(x+1)%5]) & temp[(x+2)%5]));
-        }
-    }
-    assert(!memcmp(state, chi_steps, 200));
-#endif
-
+    
+#if 0
     {   /* === ι step (see [Keccak Reference, Section 2.3.5]) === */
         for(j=0; j<7; j++) {
             unsigned int bitPosition = (1<<j)-1; /* 2^j-1 */
@@ -458,6 +395,7 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
                 XORLane(0, 0, (tKeccakLane)1<<bitPosition);
         }
     }
+#endif
 
 }
 
