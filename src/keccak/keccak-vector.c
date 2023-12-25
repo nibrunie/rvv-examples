@@ -226,6 +226,23 @@ vuint64m4_t __riscv_vcreate_v_u64m1_u64m4(vuint64m1_t v0, vuint64m1_t v1, vuint6
     res = __riscv_vset_v_u64m1_u64m4(res, 3, v3);
     return res;
 }
+/** This builtin was added recently to RVV intrinsics and seems to be missing from
+ *  some recent clang version.
+*/
+vuint64m4_t __riscv_vrol_vx_u64m4(vuint64m4_t vs2, size_t rot, size_t vl){
+    vuint64m4_t res = __riscv_vor_vv_u64m4(__riscv_vsll_vx_u64m4(vs2, rot,      vl),
+                                           __riscv_vsrl_vx_u64m4(vs2, 64 - rot, vl),
+                                           vl);
+    return res;
+}
+
+vuint64m4_t __riscv_vrol_vv_u64m4(vuint64m4_t data, vuint64m4_t rots, size_t vl){
+    vuint64m4_t rotsComp = __riscv_vrsub_vx_u64m4(rots, 64, vl); 
+    vuint64m4_t res = __riscv_vor_vv_u64m4(__riscv_vsll_vv_u64m4(data, rots,      vl),
+                                           __riscv_vsrl_vv_u64m4(data, rotsComp, vl),
+                                           vl);
+    return res;
+}
 
 /**
  * Function that computes the Keccak-f[1600] permutation on the given state.
@@ -336,6 +353,69 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
 #       endif
     }
 
+    /* python script to expend A to B mapping
+
+def BfromA(x, y):
+    return y, (2 * x + 3 * y) % 5
+
+for j in range(5):
+    for i in range(5):
+        y = i
+        xDual = (j - 3 * y)
+        # x = {0: 0, 2: 1, 4: 2, 3: 4, 1: 3}[xDual]
+        x = (xDual * 3) % 5 # 3 is 1/2 in the field
+        #print(f"B[{i},{j}] = A[{x},{y}]", "")
+        print(f"{x + 5 * y}, ", end="")
+    print("")
+
+# python script to expand rotation amounts in B coordinates    
+x = 1; y = 0;
+Arots = {}
+Brots = {}
+# Iterate over ((0 1)(2 3))^t * (1 0) for 0 ≤ t ≤ 23 
+for t in range(25):
+    # Compute the rotation constant r = (t+1)(t+2)/2
+    r = ((t+1)*(t+2)/2)%64;
+    Arots[(x,y)] = r
+    Brots[BfromA(x,y)] = r
+    # Compute ((0 1)(2 3)) * (x y)
+    tmpY = (2*x+3*y)%5; x = y; y = tmpY;
+
+for j in range(5):
+    for i in range(5):
+        print(f"{Brots[(i, j)]}, ", end="")
+    print("")
+*/
+    uint16_t offset_AtoB[] = {
+        /*
+        0, 6, 12, 18, 24, 
+        3, 9, 10, 16, 22, 
+        1, 7, 13, 19, 20, 
+        4, 5, 11, 17, 23, 
+        2, 8, 14, 15, 21, 
+        */ 
+        // byte offset for each index
+        0, 48, 96, 144, 192, 
+        24, 72, 80, 128, 176, 
+        8, 56, 104, 152, 160, 
+        32, 40, 88, 136, 184, 
+        16, 64, 112, 120, 168, 
+    };
+    uint64_t rotation_B[] = {
+        0, 44, 43, 21, 14, 
+        28, 20, 3, 45, 61, 
+        1, 6, 25, 8, 18, 
+        27, 36, 10, 15, 56, 
+        62, 55, 39, 41, 2, 
+    };
+
+    vuint16m1_t index_row0 = __riscv_vle16_v_u16m1(offset_AtoB, 5);
+    vuint64m4_t B_row0 = __riscv_vluxei16_v_u64m4(state, index_row0, 5);
+    vuint64m4_t rots_row0 = __riscv_vle64_v_u64m4(rotation_B, 5);
+    B_row0 = __riscv_vrol_vv_u64m4(B_row0, rots_row0, 5);
+    tKeccakLane B_rotated_rvv[5];
+    __riscv_vse64_v_u64m4(B_rotated_rvv, B_row0, 5);
+
     {   /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
         tKeccakLane current, temp;
         /* Start at coordinates (1 0) */
@@ -353,6 +433,7 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
             current = temp;
         }
     }
+    assert(!memcmp(state, B_rotated_rvv, 40));
 
     {   /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
         tKeccakLane temp[5];
