@@ -353,39 +353,8 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
 #       endif
     }
 
-    /* python script to expend A to B mapping
-
-def BfromA(x, y):
-    return y, (2 * x + 3 * y) % 5
-
-for j in range(5):
-    for i in range(5):
-        y = i
-        xDual = (j - 3 * y)
-        # x = {0: 0, 2: 1, 4: 2, 3: 4, 1: 3}[xDual]
-        x = (xDual * 3) % 5 # 3 is 1/2 in the field
-        #print(f"B[{i},{j}] = A[{x},{y}]", "")
-        print(f"{x + 5 * y}, ", end="")
-    print("")
-
-# python script to expand rotation amounts in B coordinates    
-x = 1; y = 0;
-Arots = {}
-Brots = {}
-# Iterate over ((0 1)(2 3))^t * (1 0) for 0 ≤ t ≤ 23 
-for t in range(25):
-    # Compute the rotation constant r = (t+1)(t+2)/2
-    r = ((t+1)*(t+2)/2)%64;
-    Arots[(x,y)] = r
-    Brots[BfromA(x,y)] = r
-    # Compute ((0 1)(2 3)) * (x y)
-    tmpY = (2*x+3*y)%5; x = y; y = tmpY;
-
-for j in range(5):
-    for i in range(5):
-        print(f"{Brots[(i, j)]}, ", end="")
-    print("")
-*/
+    /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
+    // indices and rotations generated with keccak/utils.py
     uint16_t offset_AtoB[] = {
         /*
         0, 6, 12, 18, 24, 
@@ -408,14 +377,22 @@ for j in range(5):
         27, 36, 10, 15, 56, 
         62, 55, 39, 41, 2, 
     };
+    tKeccakLane B_rotated_rvv[25];
 
-    vuint16m1_t index_row0 = __riscv_vle16_v_u16m1(offset_AtoB, 5);
-    vuint64m4_t B_row0 = __riscv_vluxei16_v_u64m4(state, index_row0, 5);
-    vuint64m4_t rots_row0 = __riscv_vle64_v_u64m4(rotation_B, 5);
-    B_row0 = __riscv_vrol_vv_u64m4(B_row0, rots_row0, 5);
-    tKeccakLane B_rotated_rvv[5];
-    __riscv_vse64_v_u64m4(B_rotated_rvv, B_row0, 5);
+    unsigned rowId;
+    // FIXME: could be done linearly on the 25-element array (no need to split by row)
+    for (rowId = 0; rowId < 5; rowId++) {
+        vuint16m1_t index_row = __riscv_vle16_v_u16m1(offset_AtoB + 5 * rowId, 5);
+        vuint64m4_t B_row = __riscv_vluxei16_v_u64m4((uint64_t*)state, index_row, 5);
+        vuint64m4_t rots_row = __riscv_vle64_v_u64m4(rotation_B + 5 * rowId, 5);
+        B_row = __riscv_vrol_vv_u64m4(B_row, rots_row, 5);
+        __riscv_vse64_v_u64m4(B_rotated_rvv + 5 * rowId, B_row, 5);
+    }
+    // using a second array to avoid overwriting elements
+    // FIXME: to be optimized
+    memcpy(state, B_rotated_rvv, 200);
 
+#if 0
     {   /* === ρ and π steps (see [Keccak Reference, Sections 2.3.3 and 2.3.4]) === */
         tKeccakLane current, temp;
         /* Start at coordinates (1 0) */
@@ -433,7 +410,8 @@ for j in range(5):
             current = temp;
         }
     }
-    assert(!memcmp(state, B_rotated_rvv, 40));
+    assert(!memcmp(state, B_rotated_rvv, 200));
+#endif
 
     {   /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
         tKeccakLane temp[5];
