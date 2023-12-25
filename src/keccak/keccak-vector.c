@@ -296,6 +296,9 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
         vuint64m4_t row3 = __riscv_vcreate_v_u64m1_u64m4(row3_0, row3_1, row3_2, zero_u64m1);
         vuint64m4_t row4 = __riscv_vcreate_v_u64m1_u64m4(row4_0, row4_1, row4_2, zero_u64m1);
         */
+       {
+
+       }
        vuint64m4_t row0 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 0, 5);
        vuint64m4_t row1 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 5, 5);
        vuint64m4_t row2 = __riscv_vle64_v_u64m4(((uint64_t*)state) + 10, 5);
@@ -412,7 +415,28 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
     }
     assert(!memcmp(state, B_rotated_rvv, 200));
 #endif
+    /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
+    tKeccakLane chi_steps[25];
+    if (1) {
+        unsigned rowId;
+        for (rowId = 0; rowId < 5; rowId++) {
+            vuint64m4_t row = __riscv_vle64_v_u64m4(((uint64_t*)state) + rowId * 5, 5);
+            vuint64m4_t row_xp1 = __riscv_vslidedown_vx_u64m4(row, 1, 4);   // {row[1], row[2], row[3], row{4}}
+            vuint64m4_t row_xp2 = __riscv_vslidedown_vx_u64m4(row, 2, 3);   // {row[2], row[3], row[4]}
 
+            row_xp1 = __riscv_vslideup_vx_u64m4(row_xp1, row, 4, 5); // {row[1], row[2], row[3], row[4], row[0]}
+            row_xp2 = __riscv_vslideup_vx_u64m4(row_xp2, row, 3, 5); // {row[2], row[3], row[4], row[0], row[1]}
+
+            row = __riscv_vxor_vv_u64m4(row, 
+                                        // FIXME: should be replaced by vandn from Zvkb
+                                        __riscv_vand_vv_u64m4( __riscv_vnot_v_u64m4(row_xp1, 5), row_xp2, 5),
+                                        5);
+
+            __riscv_vse64_v_u64m4((uint64_t*)chi_steps + rowId * 5, row, 5);
+        }
+
+    }
+#if 1
     {   /* === χ step (see [Keccak Reference, Section 2.3.1]) === */
         tKeccakLane temp[5];
         for(y=0; y<5; y++) {
@@ -424,6 +448,8 @@ void KeccakF1600_Round_vector(void *state, unsigned round, uint8_t* pLFSRstate)
                 writeLane(x, y, temp[x] ^((~temp[(x+1)%5]) & temp[(x+2)%5]));
         }
     }
+    assert(!memcmp(state, chi_steps, 200));
+#endif
 
     {   /* === ι step (see [Keccak Reference, Section 2.3.5]) === */
         for(j=0; j<7; j++) {
