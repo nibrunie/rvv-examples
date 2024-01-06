@@ -1,6 +1,7 @@
 // file: bench_matrix_transpose.c
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <bench_matrix_utils.h>
 
@@ -17,26 +18,16 @@ void matrix_dump(float *mat, unsigned n)
 
 }
 
-/** transpose of a n x n matrix
- *
- * @param dst address of destination matrix
- * @param src address of source matrix
- * @param n matrix dimensions
- */
-void matrix_transpose(float *dst,
-                      float *src,
-                      size_t n);
+/** Declaring various matrix transpose implementations **/
 
-void matrix_transpose_intrinsics_4x4(float *dst,
-                                     float *src);
 
-void matrix_transpose_intrinsics(float *dst,
-                                 float *src,
-                                 size_t n);
+void matrix_transpose(float *dst, float *src, size_t n);
 
-void matrix_transpose_intrinsics_loads(float *dst,
-                                       float *src,
-                                       size_t n); 
+void matrix_transpose_intrinsics_4x4(float *dst, float *src);
+
+void matrix_transpose_intrinsics(float *dst, float *src, size_t n);
+
+void matrix_transpose_intrinsics_loads(float *dst, float *src, size_t n); 
 
 void matrix_4x4_transpose_segmented_load_intrinsics(float* dst, float* src);
 
@@ -55,13 +46,6 @@ unsigned long matrix_4x4_transpose_vslide_bench(float* dst, float* src);
 
 float src[MATRIX_SIZE * MATRIX_SIZE];
 float dst[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst2[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst3[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst4[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst5[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst6[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst7[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
-float dst8[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
 
 
 int main(void) {
@@ -85,70 +69,84 @@ int main(void) {
     printf("baseline matrix_transpose used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = read_perf_counter();
-    matrix_transpose_intrinsics_4x4(dst2, src);
+    matrix_transpose_intrinsics_4x4(dst, src);
     stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics_4x4 result:\n");
-    matrix_dump(dst2, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_transpose_intrinsics_4x4 used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = read_perf_counter();
-    matrix_transpose_intrinsics(dst3, src, MATRIX_SIZE);
+    matrix_transpose_intrinsics(dst, src, MATRIX_SIZE);
     stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics result:\n");
-    matrix_dump(dst3, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_transpose_intrinsics used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = read_perf_counter();
-    matrix_transpose_intrinsics_loads(dst4, src, MATRIX_SIZE);
+    matrix_transpose_intrinsics_loads(dst, src, MATRIX_SIZE);
     stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics_loads result:\n");
-    matrix_dump(dst4, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_transpose_intrinsics_loads used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = read_perf_counter();
-    matrix_4x4_transpose_segmented_load_intrinsics(dst5, src);
+    matrix_4x4_transpose_segmented_load_intrinsics(dst, src);
     stop = read_perf_counter();
 
     printf("matrix_4x4_transpose_segmented_load_intrinscs result:\n");
-    matrix_dump(dst5, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_4x4_transpose_segmented_load_intrinscs used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = read_perf_counter();
-    matrix_4x4_transpose_segmented_store_intrinsics(dst6, src);
+    matrix_4x4_transpose_segmented_store_intrinsics(dst, src);
     stop = read_perf_counter();
 
     printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst6, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_4x4_transpose_segmented_store_intrinscs used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = 0;
-    stop = matrix_4x4_transpose_vrgather_bench(dst7, src);
+    stop = matrix_4x4_transpose_vrgather_bench(dst, src);
 
     printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst7, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_4x4_transpose_vrgather used %d instruction(s) to tranpose %dx%d=%d element(s) (in registers).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
     start = 0;
-    stop = matrix_4x4_transpose_vslide_bench(dst8, src);
+    stop = matrix_4x4_transpose_vslide_bench(dst, src);
 
     printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst8, MATRIX_SIZE);
+    matrix_dump(dst, MATRIX_SIZE);
 
     printf("matrix_4x4_transpose_vslide used %d instruction(s) to tranpose %dx%d=%d element(s) (in registers).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
