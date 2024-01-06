@@ -3,6 +3,25 @@
 #include <bench_matrix_utils.h>
 
 
+
+/** generic benchmark wrapper for 4x4 matrix transpose implementations */
+unsigned long matrix_4x4_transpose_bench(float* dst, float* src, matrix_transpose_4x4_func_t func) {
+    unsigned long start, stop;
+    start = read_perf_counter();
+    func(dst, src);
+    stop = read_perf_counter();
+    return stop - start;
+}
+
+/** generic benchmark wrapper for 4x4 matrix transpose implementations */
+unsigned long matrix_nxn_transpose_bench(float* dst, float* src, size_t n, matrix_transpose_nxn_func_t func) {
+    unsigned long start, stop;
+    start = read_perf_counter();
+    func(dst, src, n);
+    stop = read_perf_counter();
+    return stop - start;
+}
+
 /** transpose of a n x n matrix
  *
  *  Baseline implementation (not using RVV explicitly through intrinsics)
@@ -27,11 +46,11 @@ void matrix_transpose(float *dst,
  * @param dst address of destination matrix
  * @param src address of source matrix
  */
-void matrix_transpose_4x4(float *dst, float *src, size_t n) 
+void matrix_transpose_4x4(float *dst, float *src) 
 {
     size_t i, j;
     for (i = 0; i < 4; ++i)
-        for (j = 0; j < 4; ++j) dst[i * n + j] = src[j * n + i];
+        for (j = 0; j < 4; ++j) dst[i * 4 + j] = src[j * 4 + i];
 };
 
 /** 4x4 matrix transpose using strided stores */
@@ -120,24 +139,6 @@ void matrix_transpose_in_register(uint32_t* outputMat, uint32_t* inputMat) {
 }
 
 
-void matrix_transpose_segmented_load(float* dst, float* src) {
-    asm volatile (
-        // loading input matrix and performing the transpose at the same time
-        // If the matrix was in registers, one could either use a unit-strided store
-        // to store the input matrix in memory and then load it back with the 4-field
-        // segmented load or one could use a 4-field segmented store to transpose
-        // the matrix while storing it in a temporary memory buffer and then 
-        // load it back (already transposed) in a vector register group through
-        // the use of a unit-strided load
-        "vsetivli a7, 4, e32, m1, tu, mu \n"
-        "vlseg4e32.v v4, 0(%[inputMat])\n"
-        "vsetivli a7, 16, e32, m4, tu, mu\n"
-        "vse32.v v4, 0(%[outputMat])\n"
-        :
-        : [inputMat]"r"(src), [outputMat]"r"(dst)
-        :
-    );
-}
 void matrix_4x4_transpose_segmented_load_intrinsics(float* dst, float* src) {
     vfloat32m1x4_t data = __riscv_vlseg4e32_v_f32m1x4(src, 4);
     vfloat32m1_t data0 = __riscv_vget_v_f32m1x4_f32m1(data, 0);
@@ -147,6 +148,7 @@ void matrix_4x4_transpose_segmented_load_intrinsics(float* dst, float* src) {
     vfloat32m4_t packedData = __riscv_vcreate_v_f32m1_f32m4(data0, data1, data2, data3);
     __riscv_vse32_v_f32m4(dst, packedData, 16);
 }
+
 
 void matrix_4x4_transpose_segmented_store_intrinsics(float* dst, float* src) {
     vfloat32m4_t data = __riscv_vle32_v_f32m4(src, 16);
@@ -158,17 +160,6 @@ void matrix_4x4_transpose_segmented_store_intrinsics(float* dst, float* src) {
     __riscv_vsseg4e32_v_f32m1x4(dst, packedData, 4);
 }
 
-void matrix_transpose_segmented_store(float* dst, float* src) {
-    asm volatile (
-        "vsetivli a7, 16, e32, m4, tu, mu\n"
-        "vle32.v v4, 0(%[inputMat])\n"
-        "vsetivli a7, 4, e32, m1, tu, mu \n"
-        "vsseg4e32.v v4, 0(%[outputMat])\n"
-        :
-        : [inputMat]"r"(src), [outputMat]"r"(dst)
-        :
-    );
-}
 
 /** extracting the array from the function matrix_4x4_transpose_vrgather
  *  seems to allow more optimization
@@ -230,6 +221,48 @@ vfloat32m4_t matrix_4x4_transpose_vslide(vfloat32m4_t src) {
     vfloat32m1_t outMat3 = __riscv_vslidedown_vx_f32m1_tu(transMat3, transMat1, 2, 2);
 
     return __riscv_vcreate_v_f32m1_f32m4(outMat0, outMat1, outMat2, outMat3);
+}
+
+
+/** Benchmark wrapper for nxn baseline matrix transpose */
+unsigned long matrix_transpose_nxn_bench(float* dst, float* src, size_t n)
+{
+    return matrix_nxn_transpose_bench(dst, src, n, matrix_transpose);
+}
+
+
+/** Benchmark wrapper for 4x4 baseline matrix transpose */
+unsigned long matrix_transpose_4x4_bench(float* dst, float* src)
+{
+    return matrix_4x4_transpose_bench(dst, src, matrix_transpose_4x4);
+}
+
+/** Benchmark wrapper for 4x4 intrinsic based matrix transpose */
+unsigned long matrix_transpose_intrinsics_4x4_bench(float* dst, float* src)
+{
+    return matrix_4x4_transpose_bench(dst, src, matrix_transpose_intrinsics_4x4);
+}
+
+/** Benchmark wrapper for nxn intrinsic based matrix transpose */
+unsigned long matrix_transpose_intrinsics_nxn_bench(float* dst, float* src, size_t n)
+{
+    return matrix_nxn_transpose_bench(dst, src, n, matrix_transpose_intrinsics);
+}
+
+/** Benchmark wrapper for nxn intrinsic based matrix transpose */
+unsigned long matrix_transpose_intrinsics_loads_nxn_bench(float* dst, float* src, size_t n)
+{
+    return matrix_nxn_transpose_bench(dst, src, n, matrix_transpose_intrinsics_loads);
+}
+
+/** wrapping segmented load based implementation */
+unsigned long matrix_4x4_transpose_segmented_load_intrinsics_bench(float* dst, float* src) {
+    return matrix_4x4_transpose_bench(dst, src, matrix_4x4_transpose_segmented_load_intrinsics);
+}
+
+/** wrapping segmented store based implementation */
+unsigned long matrix_4x4_transpose_segmented_store_intrinsics_bench(float* dst, float* src) {
+    return matrix_4x4_transpose_bench(dst, src, matrix_4x4_transpose_segmented_store_intrinsics);
 }
 
 /** Intrinsics based implementation of 4x4 32-bit matrix transpose */

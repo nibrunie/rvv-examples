@@ -19,19 +19,19 @@ void matrix_dump(float *mat, unsigned n)
 /** Declaring various matrix transpose implementations **/
 
 
-void matrix_transpose(float *dst, float *src, size_t n);
+unsigned long matrix_transpose_nxn_bench(float *dst, float *src, size_t n);
 
-void matrix_transpose_4x4(float *dst, float *src, size_t n); 
+unsigned long matrix_transpose_4x4_bench(float *dst, float *src, size_t n); 
 
-void matrix_transpose_intrinsics_4x4(float *dst, float *src);
+unsigned long matrix_transpose_intrinsics_4x4_bench(float* dst, float* src);
 
-void matrix_transpose_intrinsics(float *dst, float *src, size_t n);
+unsigned long matrix_transpose_intrinsics_nxn_bench(float *dst, float *src, size_t n);
 
-void matrix_transpose_intrinsics_loads(float *dst, float *src, size_t n); 
+unsigned long matrix_transpose_intrinsics_loads_nxn_bench(float *dst, float *src, size_t n); 
 
-void matrix_4x4_transpose_segmented_load_intrinsics(float* dst, float* src);
+unsigned long matrix_4x4_transpose_segmented_load_intrinsics_bench(float* dst, float* src);
 
-void matrix_4x4_transpose_segmented_store_intrinsics(float* dst, float* src);
+unsigned long matrix_4x4_transpose_segmented_store_intrinsics_bench(float* dst, float* src);
 
 unsigned long matrix_4x4_transpose_vrgather_bench (float* dst, float* src);
 
@@ -47,6 +47,21 @@ unsigned long matrix_4x4_transpose_vslide_bench(float* dst, float* src);
 float src[MATRIX_SIZE * MATRIX_SIZE];
 float dst[MATRIX_SIZE * MATRIX_SIZE] = {0.f};
 
+typedef unsigned long (matrix_transpose_4x4_bench_func_t)(float* dst, float* src);
+typedef unsigned long (matrix_transpose_nxn_bench_func_t)(float* dst, float* src, size_t n);
+
+/** Descriptor structure for 4x4 matrix transpose benchmark */
+typedef struct {
+    matrix_transpose_4x4_bench_func_t* bench;
+    char label[100];
+} matrix_4x4_bench_t;
+
+/** Descriptor structure for nxn matrix transpose benchmark */
+typedef struct {
+    matrix_transpose_nxn_bench_func_t* bench;
+    char label[100];
+} matrix_nxn_bench_t;
+
 
 int main(void) {
     int i;
@@ -59,108 +74,48 @@ int main(void) {
     printf("source matrix:\n");
     matrix_dump(src, MATRIX_SIZE);
 
-    start = read_perf_counter();
-    matrix_transpose(dst, src, MATRIX_SIZE);
-    stop = read_perf_counter();
+    matrix_4x4_bench_t benchmarks_4x4[] = {
+        (matrix_4x4_bench_t){.bench = matrix_transpose_4x4_bench, .label="baseline matrix_transpose 4x4"},
+        (matrix_4x4_bench_t){.bench = matrix_transpose_intrinsics_4x4_bench, .label="matrix_transpose intrinsics 4x4"},
+        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_segmented_load_intrinsics_bench, .label="matrix_transpose_segmented_load 4x4"},
+        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_segmented_store_intrinsics_bench, .label="matrix_transpose_segmented_store 4x4"},
+        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_vrgather_bench, .label="matrix_transpose_vrgather 4x4"},
+        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_vslide_bench, .label="matrix_transpose_vslide 4x4"},
+    };
 
-    printf("matrix_transpose result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
+    matrix_nxn_bench_t benchmarks_nxn[] = {
+        (matrix_nxn_bench_t){.bench = matrix_transpose_nxn_bench, .label="baseline matrix_transpose nxn"},
+        (matrix_nxn_bench_t){.bench = matrix_transpose_intrinsics_nxn_bench, .label="matrix_transpose intrinsics nxn"},
+        (matrix_nxn_bench_t){.bench = matrix_transpose_intrinsics_loads_nxn_bench, .label="matrix_transpose_loads intrinsics nxn"},
+    };
 
-    printf("baseline matrix_transpose used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+    // 4x4 benchmarks
+    for (unsigned benchId=0; benchId < sizeof(benchmarks_4x4) / sizeof(matrix_4x4_bench_t); benchId++)
+    {
+        memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+        unsigned long perf_count = benchmarks_4x4[benchId].bench(dst, src);
 
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+        printf("--------------------------------------------------------------------------------\n");
+        printf("%s result:\n", benchmarks_4x4[benchId].label);
+        matrix_dump(dst, MATRIX_SIZE);
 
-    start = read_perf_counter();
-    matrix_transpose_4x4(dst, src, MATRIX_SIZE);
-    stop = read_perf_counter();
+        printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+            benchmarks_4x4[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+    }
 
-    printf("matrix_transpose_4x4 result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
+    // nxn benchmarks
+    for (unsigned benchId=0; benchId < sizeof(benchmarks_nxn) / sizeof(matrix_nxn_bench_t); benchId++)
+    {
+        memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+        unsigned long perf_count = benchmarks_nxn[benchId].bench(dst, src, MATRIX_SIZE);
 
-    printf("baseline matrix_transpose_4x4 used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+        printf("--------------------------------------------------------------------------------\n");
+        printf("%s result:\n", benchmarks_nxn[benchId].label);
+        matrix_dump(dst, MATRIX_SIZE);
 
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+        printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+            benchmarks_nxn[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+    }
 
-    start = read_perf_counter();
-    matrix_transpose_intrinsics_4x4(dst, src);
-    stop = read_perf_counter();
-
-    printf("matrix_transpose_intrinsics_4x4 result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_transpose_intrinsics_4x4 used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = read_perf_counter();
-    matrix_transpose_intrinsics(dst, src, MATRIX_SIZE);
-    stop = read_perf_counter();
-
-    printf("matrix_transpose_intrinsics result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_transpose_intrinsics used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = read_perf_counter();
-    matrix_transpose_intrinsics_loads(dst, src, MATRIX_SIZE);
-    stop = read_perf_counter();
-
-    printf("matrix_transpose_intrinsics_loads result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_transpose_intrinsics_loads used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = read_perf_counter();
-    matrix_4x4_transpose_segmented_load_intrinsics(dst, src);
-    stop = read_perf_counter();
-
-    printf("matrix_4x4_transpose_segmented_load_intrinscs result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_4x4_transpose_segmented_load_intrinscs used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = read_perf_counter();
-    matrix_4x4_transpose_segmented_store_intrinsics(dst, src);
-    stop = read_perf_counter();
-
-    printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_4x4_transpose_segmented_store_intrinscs used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = 0;
-    stop = matrix_4x4_transpose_vrgather_bench(dst, src);
-
-    printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_4x4_transpose_vrgather used %d instruction(s) to tranpose %dx%d=%d element(s) (in registers).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
-
-    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-
-    start = 0;
-    stop = matrix_4x4_transpose_vslide_bench(dst, src);
-
-    printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
-    matrix_dump(dst, MATRIX_SIZE);
-
-    printf("matrix_4x4_transpose_vslide used %d instruction(s) to tranpose %dx%d=%d element(s) (in registers).\n",
-           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
     return 0;
 }
