@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <bench_matrix_utils.h>
 
 
 /** Display the content of a n x matrix on stdout */
@@ -45,16 +46,6 @@ unsigned long matrix_4x4_transpose_vrgather_bench (float* dst, float* src);
 
 unsigned long matrix_4x4_transpose_vslide_bench(float* dst, float* src); 
 
-/** return the value of the instret counter
- *
- *  The instret counter counts the number of retired (executed) instructions.
-*/
-static unsigned long read_instret(void)
-{
-  unsigned long instret;
-  asm volatile ("rdinstret %0" : "=r" (instret));
-  return instret;
-}
 
 // Defining a default size fot the inputs and output array
 // (can be overloaded during compilation with -DARRAY_SIZE=<value>)
@@ -84,19 +75,19 @@ int main(void) {
     printf("source matrix:\n");
     matrix_dump(src, MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_transpose(dst, src, MATRIX_SIZE);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_transpose result:\n");
     matrix_dump(dst, MATRIX_SIZE);
 
-    printf("matrix_transpose used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+    printf("baseline matrix_transpose used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_transpose_intrinsics_4x4(dst2, src);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics_4x4 result:\n");
     matrix_dump(dst2, MATRIX_SIZE);
@@ -104,9 +95,9 @@ int main(void) {
     printf("matrix_transpose_intrinsics_4x4 used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_transpose_intrinsics(dst3, src, MATRIX_SIZE);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics result:\n");
     matrix_dump(dst3, MATRIX_SIZE);
@@ -114,9 +105,9 @@ int main(void) {
     printf("matrix_transpose_intrinsics used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_transpose_intrinsics_loads(dst4, src, MATRIX_SIZE);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_transpose_intrinsics_loads result:\n");
     matrix_dump(dst4, MATRIX_SIZE);
@@ -124,9 +115,9 @@ int main(void) {
     printf("matrix_transpose_intrinsics_loads used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_4x4_transpose_segmented_load_intrinsics(dst5, src);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_4x4_transpose_segmented_load_intrinscs result:\n");
     matrix_dump(dst5, MATRIX_SIZE);
@@ -134,9 +125,9 @@ int main(void) {
     printf("matrix_4x4_transpose_segmented_load_intrinscs used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
-    start = read_instret();
+    start = read_perf_counter();
     matrix_4x4_transpose_segmented_store_intrinsics(dst6, src);
-    stop = read_instret();
+    stop = read_perf_counter();
 
     printf("matrix_4x4_transpose_segmented_store_intrinscs result:\n");
     matrix_dump(dst6, MATRIX_SIZE);

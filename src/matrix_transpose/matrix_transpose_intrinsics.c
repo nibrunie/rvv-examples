@@ -1,16 +1,7 @@
 #include <riscv_vector.h>
 #include <stddef.h>
+#include <bench_matrix_utils.h>
 
-/** return the value of the instret counter
- *
- *  The instret counter counts the number of retired (executed) instructions.
-*/
-static unsigned long read_instret(void)
-{
-  unsigned long instret;
-  asm volatile ("rdinstret %0" : "=r" (instret));
-  return instret;
-}
 
 /** transpose of a n x n matrix
  *
@@ -25,8 +16,13 @@ void matrix_transpose(float *dst,
                       size_t n) 
 {
     size_t i, j;
+#   if 1
     for (i = 0; i < n; ++i)
         for (j = 0; j < n; ++j) dst[i * n + j] = src[j * n + i];
+#   else
+    for (i = 0; i < 4; ++i)
+        for (j = 0; j < 4; ++j) dst[i * n + j] = src[j * n + i];
+#   endif
 };
 
 /** 4x4 matrix transpose using strided stores */
@@ -190,39 +186,39 @@ vfloat32m4_t matrix_4x4_transpose_vrgather(vfloat32m4_t src) {
 unsigned long matrix_4x4_transpose_vrgather_bench (float* dst, float* src) {
     unsigned long start, stop;
     vfloat32m4_t data = __riscv_vle32_v_f32m4(src, 16);
-    start = read_instret();
+    start = read_perf_counter();
     vfloat32m4_t result = matrix_4x4_transpose_vrgather(data);
-    stop = read_instret();
+    stop = read_perf_counter();
     __riscv_vse32_v_f32m4(dst, result, 16);
 
     return stop - start;
 }
 
 vfloat32m4_t matrix_4x4_transpose_vslide(vfloat32m4_t src) {
-    vfloat32m1_t matRegIn0 = __riscv_vget_v_f32m4_f32m1(src, 0);
-    vfloat32m1_t matRegIn1 = __riscv_vget_v_f32m4_f32m1(src, 1);
-    vfloat32m1_t matRegIn2 = __riscv_vget_v_f32m4_f32m1(src, 2);
-    vfloat32m1_t matRegIn3 = __riscv_vget_v_f32m4_f32m1(src, 3);
+    vfloat32m1_t inMat0 = __riscv_vget_v_f32m4_f32m1(src, 0);
+    vfloat32m1_t inMat1 = __riscv_vget_v_f32m4_f32m1(src, 1);
+    vfloat32m1_t inMat2 = __riscv_vget_v_f32m4_f32m1(src, 2);
+    vfloat32m1_t inMat3 = __riscv_vget_v_f32m4_f32m1(src, 3);
 
     vbool32_t oddMask = __riscv_vreinterpret_v_u32m1_b32(__riscv_vmv_v_x_u32m1(0xaaaa, 1));
     // vl=4 in the following
     // should be mapped to vslideup.vi
-    vfloat32m1_t smallTransposeMat0 = __riscv_vslideup_vx_f32m1_tumu(oddMask, matRegIn0, matRegIn1, 1, 4);
-    vfloat32m1_t smallTransposeMat2 = __riscv_vslideup_vx_f32m1_tumu(oddMask, matRegIn2, matRegIn3, 1, 4);
+    vfloat32m1_t transMat0 = __riscv_vslideup_vx_f32m1_tumu(oddMask, inMat0, inMat1, 1, 4);
+    vfloat32m1_t transMat2 = __riscv_vslideup_vx_f32m1_tumu(oddMask, inMat2, inMat3, 1, 4);
 
     vbool32_t evenMask = __riscv_vreinterpret_v_u32m1_b32(__riscv_vmv_v_x_u32m1(0x5555, 1));
-    // should me mapped to vslidedown.vi
-    vfloat32m1_t smallTransposeMat1 = __riscv_vslidedown_vx_f32m1_tumu(evenMask, matRegIn1, matRegIn0, 1, 4);
-    vfloat32m1_t smallTransposeMat3 = __riscv_vslidedown_vx_f32m1_tumu(evenMask, matRegIn3, matRegIn2, 1, 4);
+    // should be mapped to vslidedown.vi
+    vfloat32m1_t transMat1 = __riscv_vslidedown_vx_f32m1_tumu(evenMask, inMat1, inMat0, 1, 4);
+    vfloat32m1_t transMat3 = __riscv_vslidedown_vx_f32m1_tumu(evenMask, inMat3, inMat2, 1, 4);
 
     // should be mapped to vslideup.vi
-    vfloat32m1_t outMat0 = __riscv_vslideup_vx_f32m1_tu(smallTransposeMat0, smallTransposeMat2, 2, 4);
-    vfloat32m1_t outMat1 = __riscv_vslideup_vx_f32m1_tu(smallTransposeMat1, smallTransposeMat3, 2, 4);
+    vfloat32m1_t outMat0 = __riscv_vslideup_vx_f32m1_tu(transMat0, transMat2, 2, 4);
+    vfloat32m1_t outMat1 = __riscv_vslideup_vx_f32m1_tu(transMat1, transMat3, 2, 4);
 
     // vl=2 in the following
-    // should me mapped to vslidedown.vi
-    vfloat32m1_t outMat2 = __riscv_vslidedown_vx_f32m1_tu(smallTransposeMat2, smallTransposeMat0, 2, 2);
-    vfloat32m1_t outMat3 = __riscv_vslidedown_vx_f32m1_tu(smallTransposeMat3, smallTransposeMat1, 2, 2);
+    // should be mapped to vslidedown.vi
+    vfloat32m1_t outMat2 = __riscv_vslidedown_vx_f32m1_tu(transMat2, transMat0, 2, 2);
+    vfloat32m1_t outMat3 = __riscv_vslidedown_vx_f32m1_tu(transMat3, transMat1, 2, 2);
 
     return __riscv_vcreate_v_f32m1_f32m4(outMat0, outMat1, outMat2, outMat3);
 }
@@ -231,9 +227,9 @@ vfloat32m4_t matrix_4x4_transpose_vslide(vfloat32m4_t src) {
 unsigned long matrix_4x4_transpose_vslide_bench(float* dst, float* src) {
     unsigned long start, stop;
     vfloat32m4_t data = __riscv_vle32_v_f32m4(src, 16);
-    start = read_instret();
+    start = read_perf_counter();
     vfloat32m4_t result = matrix_4x4_transpose_vslide(data);
-    stop = read_instret();
+    stop = read_perf_counter();
     __riscv_vse32_v_f32m4(dst, result, 16);
 
     return stop - start;
