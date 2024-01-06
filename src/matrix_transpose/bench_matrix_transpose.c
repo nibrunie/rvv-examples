@@ -13,9 +13,7 @@ void matrix_dump(float *mat, unsigned n)
     for (i = 0; i < n; ++i) {
         for (j = 0; j < n; ++j) printf(" %.3f ", mat[i * n + j]);
         printf("\n");
-
     }
-
 }
 
 /** Declaring various matrix transpose implementations **/
