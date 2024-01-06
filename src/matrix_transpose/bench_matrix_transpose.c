@@ -23,6 +23,8 @@ void matrix_dump(float *mat, unsigned n)
 
 void matrix_transpose(float *dst, float *src, size_t n);
 
+void matrix_transpose_4x4(float *dst, float *src, size_t n); 
+
 void matrix_transpose_intrinsics_4x4(float *dst, float *src);
 
 void matrix_transpose_intrinsics(float *dst, float *src, size_t n);
@@ -67,6 +69,18 @@ int main(void) {
     matrix_dump(dst, MATRIX_SIZE);
 
     printf("baseline matrix_transpose used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+           stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+
+    memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
+    start = read_perf_counter();
+    matrix_transpose_4x4(dst, src, MATRIX_SIZE);
+    stop = read_perf_counter();
+
+    printf("matrix_transpose_4x4 result:\n");
+    matrix_dump(dst, MATRIX_SIZE);
+
+    printf("baseline matrix_transpose_4x4 used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
            stop - start, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
 
     memset(dst, 0, sizeof(dst)); // resetting array in-between experiments

@@ -16,13 +16,22 @@ void matrix_transpose(float *dst,
                       size_t n) 
 {
     size_t i, j;
-#   if 1
     for (i = 0; i < n; ++i)
         for (j = 0; j < n; ++j) dst[i * n + j] = src[j * n + i];
-#   else
+};
+
+/** transpose of a 4 x 4 matrix
+ *
+ *  Baseline implementation (not using RVV explicitly through intrinsics)
+ *
+ * @param dst address of destination matrix
+ * @param src address of source matrix
+ */
+void matrix_transpose_4x4(float *dst, float *src, size_t n) 
+{
+    size_t i, j;
     for (i = 0; i < 4; ++i)
         for (j = 0; j < 4; ++j) dst[i * n + j] = src[j * n + i];
-#   endif
 };
 
 /** 4x4 matrix transpose using strided stores */
