@@ -66,3 +66,5 @@ RUN make stamps/build-spike -j5
 RUN make stamps/build-pk64 -j5
 RUN make install
 
+# Defaulting to the /home/app directory (where we are going to bind the rvv-examples directory)
+WORKDIR /home/app
