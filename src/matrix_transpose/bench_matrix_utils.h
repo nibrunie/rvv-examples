@@ -1,3 +1,8 @@
+#include <stddef.h>
+
+typedef void(matrix_transpose_4x4_func_t)(float* dst, float* src);
+typedef void(matrix_transpose_nxn_func_t)(float* dst, float* src, size_t n);
+
 /** return the value of selected perf counter
  * 
  * perf counter is selected through a macro:
