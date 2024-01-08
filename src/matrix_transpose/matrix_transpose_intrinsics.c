@@ -3,7 +3,6 @@
 #include <bench_matrix_utils.h>
 
 
-
 /** generic benchmark wrapper for 4x4 matrix transpose implementations */
 unsigned long matrix_4x4_transpose_bench(float* dst, float* src, matrix_transpose_4x4_func_t func) {
     unsigned long start, stop;
