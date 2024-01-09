@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include <bench_matrix_utils.h>
 
 
@@ -21,7 +22,7 @@ void matrix_dump(float *mat, unsigned n)
 
 unsigned long matrix_transpose_nxn_bench(float *dst, float *src, size_t n);
 
-unsigned long matrix_transpose_4x4_bench(float *dst, float *src, size_t n); 
+unsigned long matrix_transpose_4x4_bench(float *dst, float *src); 
 
 unsigned long matrix_transpose_intrinsics_4x4_bench(float* dst, float* src);
 
@@ -103,7 +104,7 @@ int main(void) {
             benchmarks_4x4[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
     }
 
-    // nxn benchmarks
+    // nxn benchmarks on 4x4 tranpose
     for (unsigned benchId=0; benchId < sizeof(benchmarks_nxn) / sizeof(matrix_nxn_bench_t); benchId++)
     {
         memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
@@ -115,6 +116,46 @@ int main(void) {
 
         printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
             benchmarks_nxn[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+    }
+    size_t testSizes[] = {4, 16, 128, 512, 17, 129, 511};
+    for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
+    {
+        size_t n = testSizes[testId];
+        float* matrixIn = malloc(n * n * sizeof(float));
+        assert(matrixIn);
+
+        float* matrixOut = malloc(n * n * sizeof(float));
+        assert(matrixOut);
+
+        float* matrixRef = malloc(n * n * sizeof(float));
+        assert(matrixRef);
+
+
+        for (i = 0; i < n * n; ++i) {
+            matrixIn[i] = rand() / (float) RAND_MAX;
+        }
+
+        // computing reference
+        matrix_transpose_nxn_bench(matrixRef, matrixIn, n);
+
+        for (unsigned benchId=0; benchId < sizeof(benchmarks_nxn) / sizeof(matrix_nxn_bench_t); benchId++)
+        {
+            memset(matrixOut, 0, n * n * sizeof(float)); // resetting array in-between experiments
+            unsigned long perf_count = benchmarks_nxn[benchId].bench(matrixOut, matrixIn, n);
+
+            // comparing with golden (comparison mute for matrix_transpose_nxn_bench which is used as golden
+            assert(!memcmp(matrixRef, matrixOut, n * n * sizeof(float)));
+
+            printf("--------------------------------------------------------------------------------\n");
+
+            printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+                benchmarks_nxn[benchId].label, perf_count, n, n, n * n);
+        }
+
+        free(matrixIn);
+        free(matrixOut);
+        free(matrixRef);
+
     }
 
     return 0;
