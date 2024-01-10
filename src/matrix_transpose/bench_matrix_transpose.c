@@ -100,7 +100,7 @@ int main(void) {
         printf("%s result:\n", benchmarks_4x4[benchId].label);
         matrix_dump(dst, MATRIX_SIZE);
 
-        printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+        printf("%s used %d " PERF_METRIC "(s) to tranpose %dx%d=%d element(s).\n",
             benchmarks_4x4[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
     }
 
@@ -114,7 +114,7 @@ int main(void) {
         printf("%s result:\n", benchmarks_nxn[benchId].label);
         matrix_dump(dst, MATRIX_SIZE);
 
-        printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+        printf("%s used %d " PERF_METRIC "(s) to tranpose %dx%d=%d element(s).\n",
             benchmarks_nxn[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
     }
     size_t testSizes[] = {4, 16, 128, 512, 17, 129, 511};
@@ -148,7 +148,7 @@ int main(void) {
 
             printf("--------------------------------------------------------------------------------\n");
 
-            printf("%s used %d instruction(s) to tranpose %dx%d=%d element(s).\n",
+            printf("%s used %d " PERF_METRIC "(s) to tranpose %dx%d=%d element(s).\n",
                 benchmarks_nxn[benchId].label, perf_count, n, n, n * n);
         }
 
