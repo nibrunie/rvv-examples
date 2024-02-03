@@ -9,6 +9,9 @@ softmax_bench_result_t softmax_bench(float* dst, float* src, softmax_func_t func
 
 /** Quick and dirty implementation of exponential function on a binary32 input */
 float quick_dirty_expf(float x) {
+    // values determined using (python)sollya
+    // >>> iln2 = sollya.round(1/sollya.log(2), sollya.binary32, sollya.RN)
+    // >>> ln2 = sollya.round(sollya.log(2), sollya.binary32, sollya.RN)
     const float ln2 = 0x1.62e43p-1;    
     const float iln2 = 0x1.715476p0f;
 
@@ -17,6 +20,15 @@ float quick_dirty_expf(float x) {
     const float r = fmaf(- k, ln2, x);
 
     // polynomial approximation exp(r)
+    // coefficients determined using (python)sollya
+    // >>> ln2ov2 = sollya.round(sollya.log(2), sollya.binary32, sollya.RN)
+    // >>> approxInt = sollya.Interval(-ln2ov2, ln2ov2)
+    // >>> approxFun = sollya.exp(sollya.x)
+    // >>> degree = 7
+    // >>> poly = sollya.fpminimax(approxFunc,
+    //                             degree,
+    //                             [1] + [sollya.binary32] * degree,
+    //                             approxInterval)
     // 0x1p0 + _x_ * (0x1.000002p0 +
     //         _x_ * (0x1.00001p-1 +
     //         _x_ * (0x1.55546ep-3 +
