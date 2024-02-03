@@ -92,11 +92,11 @@ float quick_dirty_vector_expf(float* dst, float* src, size_t n) {
         vfloat32m1_t vx = __riscv_vle32_v_f32m1(src, vl);
 
         // argument reduction
-        vfloat32m1_t vxiln2 = __riscv_vfmul_vf_f32m1(vx, iln2, vl);
+        vfloat32m1_t vxiln2 = __riscv_vfmul(vx, iln2, vl);
         vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1(vxiln2, vl); // require round to nearest mode
         vfloat32m1_t    vfk = __riscv_vfcvt_f_x_v_f32m1(vk, vl);
         // using vfnmsac.vf to evaluate r = x - k * log(2)
-        vfloat32m1_t     vr = __riscv_vfnmsac_vf_f32m1(vx, ln2, vfk, vl);
+        vfloat32m1_t     vr = __riscv_vfnmsac(vx, ln2, vfk, vl);
 
         // polynomial approximation exp(r)
         const float poly_coeffs[] = {
@@ -110,18 +110,18 @@ float quick_dirty_vector_expf(float* dst, float* src, size_t n) {
         };
 
         vfloat32m1_t poly_vr = __riscv_vfmv_v_f_f32m1(poly_coeffs[6], vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[5], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[4], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[3], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[2], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[1], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[0], vl), vl);
-        poly_vr = __riscv_vfmadd_vv_f32m1(poly_vr, vr, __riscv_vfmv_v_f_f32m1(1.f, vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[5], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[4], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[3], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[2], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[1], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(poly_coeffs[0], vl), vl);
+        poly_vr = __riscv_vfmadd(poly_vr, vr, __riscv_vfmv_v_f_f32m1(1.f, vl), vl);
 
         // reconstruction
         const int exp_bias = 127;
-        vint32m1_t vbiased_exp = __riscv_vadd_vx_i32m1(vk, exp_bias, vl);
-        vint32m1_t vexp2_vk    = __riscv_vsll_vx_i32m1(vbiased_exp, 23, vl);
+        vint32m1_t vbiased_exp = __riscv_vadd(vk, exp_bias, vl);
+        vint32m1_t vexp2_vk    = __riscv_vsll(vbiased_exp, 23, vl);
         vfloat32m1_t vfexp2_vk = __riscv_vreinterpret_v_i32m1_f32m1(vexp2_vk);
 
         vfloat32m1_t vexp_vx  = __riscv_vfmul(poly_vr, vfexp2_vk, vl);
@@ -169,7 +169,7 @@ void softmax_rvv_norm_fp32(float* dst, float* src, size_t n)
     while (avl > 0) {
         size_t vl = __riscv_vsetvl_e32m1(avl);
         vfloat32m1_t row = __riscv_vle32_v_f32m1(dst, vl);
-        row = __riscv_vfmul_vf_f32m1(row, inv_sum, vl);
+        row = __riscv_vfmul(row, inv_sum, vl);
         __riscv_vse32(dst, row, vl);
         avl -= vl;
         dst += vl;
@@ -190,9 +190,7 @@ softmax_bench_result_t softmax_rvv_norm_fp32_bench(float* dst, float* src, doubl
 */
 void softmax_rvv_fp32(float* dst, float* src, size_t n)
 {
-    int i;
-
-    // computing the sum of exponentials
+    // computing element-wise exponentials and their seum
     float sum = quick_dirty_vector_expf(dst, src, n);
 
     // computing the reciprocal of the sum of exponentials, once and for all
