@@ -27,7 +27,10 @@ INCLUDE_DIR ?= /opt/riscv/riscv64-unknown-elf/include/
 softmax_baseline.o: softmax_baseline.c
 	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv -c -o $@ $^
 
-bench_softmax: bench_softmax.c softmax_baseline.o
+softmax_rvv.o: softmax_rvv.c
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv -c -o $@ $^
+
+bench_softmax: bench_softmax.c softmax_baseline.o softmax_rvv.o
 	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
 sim_bench_softmax: bench_softmax

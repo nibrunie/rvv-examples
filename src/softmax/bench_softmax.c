@@ -30,6 +30,8 @@ void array_dump_fp64(double *array, size_t n)
 /** Declaring various softmax implementation benchmarks **/
 softmax_bench_result_t softmax_baseline_fp32_bench(float* dst, float* src, double* golden, size_t n);
 
+softmax_bench_result_t softmax_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n); 
+
 
 // Defining a default size fot the inputs and output array
 // (can be overloaded during compilation with -DARRAY_SIZE=<value>)
@@ -52,6 +54,7 @@ typedef struct {
 
 extern void softmax_baseline_fp32_fp64(double* dst, float* src, size_t n);
 
+
 int main(void) {
     int i;
     unsigned long start, stop;
@@ -70,6 +73,7 @@ int main(void) {
 
     softmax_bench_t benchmarks[] = {
         (softmax_bench_t){.bench = softmax_baseline_fp32_bench, .label="baseline n-element softmax"},
+        (softmax_bench_t){.bench = softmax_rvv_fp32_bench,      .label="rvv-based n-element softmax"},
     };
 
     // softmax benchmarks
@@ -84,6 +88,8 @@ int main(void) {
 
         printf("%s used %d " PERF_METRIC "(s) to evaluate softmax on a %d-element array.\n",
             benchmarks[benchId].label, bench_result.perf_count, ARRAY_SIZE);
+        printf(" " PERF_METRIC " per elements:    %.3f\n", (double) bench_result.perf_count / ARRAY_SIZE);
+        printf("  element(s) per " PERF_METRIC ": %.3f\n", (double) ARRAY_SIZE / bench_result.perf_count);
         printf("  max absolute error: %.4a\n", bench_result.max_abs_error);
         printf("  max relative error: %.4a\n", bench_result.max_rel_error);
         printf("  error norm 2:       %.4a\n", bench_result.error_norm2);
