@@ -10,6 +10,8 @@
 /** Declaring various softmax implementation benchmarks **/
 softmax_bench_result_t softmax_baseline_fp32_bench(float* dst, float* src, double* golden, size_t n);
 
+softmax_bench_result_t softmax_rvv_norm_fp32_bench(float* dst, float* src, double* golden, size_t n); 
+
 softmax_bench_result_t softmax_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n); 
 
 
@@ -53,6 +55,7 @@ int main(void) {
 
     softmax_bench_t benchmarks[] = {
         (softmax_bench_t){.bench = softmax_baseline_fp32_bench, .label="baseline n-element softmax"},
+        (softmax_bench_t){.bench = softmax_rvv_norm_fp32_bench,  .label="rvv-based (norm only) n-element softmax"},
         (softmax_bench_t){.bench = softmax_rvv_fp32_bench,      .label="rvv-based n-element softmax"},
     };
 
