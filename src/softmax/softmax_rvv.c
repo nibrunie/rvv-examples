@@ -71,6 +71,9 @@ float quick_dirty_expf(float x) {
     return exp_x;
 }
 
+/** RVV-based vectorized implementation of binary32 exponential with 
+ *  result reduction (sum).
+*/
 float quick_dirty_vector_expf(float* dst, float* src, size_t n) {
     // values determined using (python)sollya
     const float ln2 = 0x1.62e43p-1;    
@@ -92,7 +95,8 @@ float quick_dirty_vector_expf(float* dst, float* src, size_t n) {
         vfloat32m1_t vxiln2 = __riscv_vfmul_vf_f32m1(vx, iln2, vl);
         vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1(vxiln2, vl); // require round to nearest mode
         vfloat32m1_t    vfk = __riscv_vfcvt_f_x_v_f32m1(vk, vl);
-        vfloat32m1_t     vr = __riscv_vfmacc_vf_f32m1(vx, ln2, __riscv_vfneg(vfk, vl), vl);
+        // using vfnmsac.vf to evaluate r = x - k * log(2)
+        vfloat32m1_t     vr = __riscv_vfnmsac_vf_f32m1(vx, ln2, vfk, vl);
 
         // polynomial approximation exp(r)
         const float poly_coeffs[] = {
@@ -125,11 +129,7 @@ float quick_dirty_vector_expf(float* dst, float* src, size_t n) {
         // element-size reduction with redution accumulator
         // tail-undisturbed is mandatory here to ensure that if vl is less
         // than VLMAX then unaffacted sum terms are not changed.
-        // vsum = __riscv_vfadd_vv_f32m1_tu(vsum, vsum, vexp_vx, vl);
-        vsum = __riscv_vfadd_vv_f32m1(vsum, vexp_vx, vl);
-
-        vfloat32m1_t vtmpredsum = __riscv_vundefined_f32m1();
-        vtmpredsum = __riscv_vfredosum_vs_f32m1_f32m1(vtmpredsum, vexp_vx, vl);
+        vsum = __riscv_vfadd_vv_f32m1_tu(vsum, vsum, vexp_vx, vl);
 
         __riscv_vse32(dst, vexp_vx, vl);
         avl -= vl;
