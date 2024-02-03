@@ -7,26 +7,6 @@
 #include <bench_softmax_utils.h>
 
 
-/** Display the content of a binary32 n-element array */
-void array_dump_fp32(float *array, size_t n)
-{
-    size_t i;
-    for (i = 0; i < n; ++i) {
-        printf(" %.3f ", array[i]);
-    }
-    printf("\n");
-}
-
-/** Display the content of a binary64 n-element array */
-void array_dump_fp64(double *array, size_t n)
-{
-    size_t i;
-    for (i = 0; i < n; ++i) {
-        printf(" %.3f ", array[i]);
-    }
-    printf("\n");
-}
-
 /** Declaring various softmax implementation benchmarks **/
 softmax_bench_result_t softmax_baseline_fp32_bench(float* dst, float* src, double* golden, size_t n);
 

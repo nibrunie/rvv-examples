@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdio.h>
 
 /** generic type for a binary32/float softmax implementation */
 typedef void(softmax_func_t)(float* dst, float* src, size_t n);
@@ -33,3 +34,24 @@ typedef struct {
     double max_rel_error;
     double error_norm2;
 } softmax_bench_result_t;
+
+
+/** Display the content of a binary32 n-element array */
+static void array_dump_fp32(float *array, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; ++i) {
+        printf(" %.3f ", array[i]);
+    }
+    printf("\n");
+}
+
+/** Display the content of a binary64 n-element array */
+static void array_dump_fp64(double *array, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; ++i) {
+        printf(" %.3f ", array[i]);
+    }
+    printf("\n");
+}
