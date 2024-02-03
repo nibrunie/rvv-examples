@@ -26,3 +26,10 @@ static unsigned long read_perf_counter(void)
 #endif
   return counter_value;
 }
+
+typedef struct {
+    unsigned long perf_count;
+    double max_abs_error;
+    double max_rel_error;
+    double error_norm2;
+} softmax_bench_result_t;

@@ -4,11 +4,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
-#include <bench_matrix_utils.h>
+#include <bench_softmax_utils.h>
 
 
-/** Display the content of a n x matrix on stdout */
-void array_dump(float *array, size_t n)
+/** Display the content of a binary32 n-element array */
+void array_dump_fp32(float *array, size_t n)
 {
     size_t i;
     for (i = 0; i < n; ++i) {
@@ -17,26 +17,31 @@ void array_dump(float *array, size_t n)
     printf("\n");
 }
 
-/** Declaring various matrix transpose implementations **/
-void softmax_baseline_fp32(float*, float*, size_t);
+/** Display the content of a binary64 n-element array */
+void array_dump_fp64(double *array, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; ++i) {
+        printf(" %.3f ", array[i]);
+    }
+    printf("\n");
+}
+
+/** Declaring various softmax implementation benchmarks **/
+softmax_bench_result_t softmax_baseline_fp32_bench(float* dst, float* src, double* golden, size_t n);
 
 
 // Defining a default size fot the inputs and output array
 // (can be overloaded during compilation with -DARRAY_SIZE=<value>)
 #ifndef ARRAY_SIZE
-#define ARRAY_SIZE 4
+#define ARRAY_SIZE 16
 #endif
 
 float src[ARRAY_SIZE];
 float dst[ARRAY_SIZE] = {0.f};
+double golden[ARRAY_SIZE] = {0.};
 
-typedef struct {
-    unsigned long cycles;
-    unsigned long instret;
-    double accuracy;
-} softmax_bench_result_t;
-
-typedef softmax_bench_result_t (softmax_bench_func_t)(float* dst, float* src, size_t n);
+typedef softmax_bench_result_t (softmax_bench_func_t)(float* dst, float* src, double* golden, size_t n);
 
 /** Descriptor structure for softmax benchmark */
 typedef struct {
@@ -45,47 +50,46 @@ typedef struct {
 } softmax_bench_t;
 
 
+extern void softmax_baseline_fp32_fp64(double* dst, float* src, size_t n);
 
 int main(void) {
     int i;
     unsigned long start, stop;
     // random initialization of the input arrays
-    for (i = 0; i < MATRIX_SIZE * MATRIX_SIZE; ++i) {
-        src[i] = rand() / (float) RAND_MAX;
+    for (i = 0; i < ARRAY_SIZE; ++i) {
+        src[i] = 2.f * rand() / (float) RAND_MAX - 1.f;
     }
 
     printf("source matrix:\n");
-    matrix_dump(src, MATRIX_SIZE);
+    array_dump_fp32(src, ARRAY_SIZE);
 
-    matrix_4x4_bench_t benchmarks_4x4[] = {
-        (matrix_4x4_bench_t){.bench = matrix_transpose_4x4_bench, .label="baseline matrix_transpose 4x4"},
-        (matrix_4x4_bench_t){.bench = matrix_transpose_intrinsics_4x4_bench, .label="matrix_transpose intrinsics 4x4"},
-        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_segmented_load_intrinsics_bench, .label="matrix_transpose_segmented_load 4x4"},
-        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_segmented_store_intrinsics_bench, .label="matrix_transpose_segmented_store 4x4"},
-        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_vrgather_bench, .label="matrix_transpose_vrgather 4x4"},
-        (matrix_4x4_bench_t){.bench = matrix_4x4_transpose_vslide_bench, .label="matrix_transpose_vslide 4x4"},
+    // computing golden value
+    softmax_baseline_fp32_fp64(golden, src, ARRAY_SIZE);
+    printf("golden result:\n");
+    array_dump_fp64(golden, ARRAY_SIZE);
+
+    softmax_bench_t benchmarks[] = {
+        (softmax_bench_t){.bench = softmax_baseline_fp32_bench, .label="baseline n-element softmax"},
     };
 
-    matrix_nxn_bench_t benchmarks_nxn[] = {
-        (matrix_nxn_bench_t){.bench = matrix_transpose_nxn_bench, .label="baseline matrix_transpose nxn"},
-        (matrix_nxn_bench_t){.bench = matrix_transpose_intrinsics_nxn_bench, .label="matrix_transpose intrinsics nxn"},
-        (matrix_nxn_bench_t){.bench = matrix_transpose_intrinsics_loads_nxn_bench, .label="matrix_transpose_loads intrinsics nxn"},
-    };
-
-    // 4x4 benchmarks
-    for (unsigned benchId=0; benchId < sizeof(benchmarks_4x4) / sizeof(matrix_4x4_bench_t); benchId++)
+    // softmax benchmarks
+    for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(softmax_bench_t); benchId++)
     {
         memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-        unsigned long perf_count = benchmarks_4x4[benchId].bench(dst, src);
+        softmax_bench_result_t bench_result = benchmarks[benchId].bench(dst, src, golden, ARRAY_SIZE);
 
         printf("--------------------------------------------------------------------------------\n");
-        printf("%s result:\n", benchmarks_4x4[benchId].label);
-        matrix_dump(dst, MATRIX_SIZE);
+        printf("%s result:\n", benchmarks[benchId].label);
+        array_dump_fp32(dst, ARRAY_SIZE);
 
-        printf("%s used %d " PERF_METRIC "(s) to tranpose %dx%d=%d element(s).\n",
-            benchmarks_4x4[benchId].label, perf_count, MATRIX_SIZE, MATRIX_SIZE, MATRIX_SIZE * MATRIX_SIZE);
+        printf("%s used %d " PERF_METRIC "(s) to evaluate softmax on a %d-element array.\n",
+            benchmarks[benchId].label, bench_result.perf_count, ARRAY_SIZE);
+        printf("  max absolute error: %.4a\n", bench_result.max_abs_error);
+        printf("  max relative error: %.4a\n", bench_result.max_rel_error);
+        printf("  error norm 2:       %.4a\n", bench_result.error_norm2);
     }
 
+#if 0
     // nxn benchmarks on 4x4 tranpose
     for (unsigned benchId=0; benchId < sizeof(benchmarks_nxn) / sizeof(matrix_nxn_bench_t); benchId++)
     {
@@ -139,6 +143,7 @@ int main(void) {
         free(matrixRef);
 
     }
+#endif
 
     return 0;
 }
