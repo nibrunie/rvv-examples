@@ -33,7 +33,13 @@ softmax_rvv.o: softmax_rvv.c
 bench_softmax: bench_softmax.c softmax_baseline.o softmax_rvv.o
 	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
+bench_exp: bench_expf.c softmax_baseline.o softmax_rvv.o
+	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+
 sim_bench_softmax: bench_softmax
+	$(SIMULATOR) $^
+
+sim_bench_exp: bench_exp
 	$(SIMULATOR) $^
 
 clean:
