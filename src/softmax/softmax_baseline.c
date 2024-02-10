@@ -36,11 +36,16 @@ void softmax_baseline_fp32(float* dst, float* src, size_t n)
 void softmax_baseline_fp32_fp64(double* dst, float* src, size_t n)
 {
     int i;
+    // looking for max input value
+    double max_x = src[0];
+    for (i = 1; i < n; ++i) {
+        if (src[i] > max_x) max_x = src[i]; 
+    }
 
     // computing the sum of exponentials
     double sum = 0.;
     for (i = 0; i < n; ++i) {
-        dst[i] = exp((double) src[i]);
+        dst[i] = exp((double) src[i] - max_x);
         sum += dst[i];
     }
 
