@@ -26,7 +26,7 @@ typedef struct {
 } softmax_bench_t;
 
 
-extern void softmax_baseline_fp32_fp64(double* dst, float* src, size_t n);
+extern void softmax_golden_fp32_fp64(double* dst, float* src, size_t n);
 
 
 int main(void) {
@@ -74,7 +74,8 @@ int main(void) {
             }
 
             // computing golden value
-            softmax_baseline_fp32_fp64(golden, src, n);
+            softmax_golden_fp32_fp64(golden, src, n);
+
 #           ifdef VERY_VERBOSE
             printf("source matrix:\n");
             array_dump_fp32(src, n);

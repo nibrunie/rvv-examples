@@ -33,7 +33,7 @@ void softmax_baseline_fp32(float* dst, float* src, size_t n)
  *  @param src source array
  *  @param n   number of element(s)
 */
-void softmax_baseline_fp32_fp64(double* dst, float* src, size_t n)
+void softmax_golden_fp32_fp64(double* dst, float* src, size_t n)
 {
     int i;
     // looking for max input value
