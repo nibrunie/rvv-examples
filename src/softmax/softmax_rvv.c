@@ -7,6 +7,11 @@
 
 softmax_bench_result_t softmax_bench(float* dst, float* src, softmax_func_t func, double* golden, size_t n); 
 
+#ifndef POLY_DEGREE
+#define POLY_DEGREE 6
+#elif (POLY_DEGREE > 6)
+#error "POLY_DEGREE MUST NOT EXCEED 6"
+#endif
 
 /** Quick and dirty implementation of exponential function on a binary32 input */
 float quick_dirty_expf(float x) {
@@ -47,7 +52,7 @@ float quick_dirty_expf(float x) {
         0x1.94480ap-13,
     };
 
-    const int poly_degree = 6;
+    const int poly_degree = POLY_DEGREE;
 
     float poly_r = poly_coeffs[poly_degree];
     int i = 0;
