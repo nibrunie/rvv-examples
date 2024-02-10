@@ -21,6 +21,7 @@ typedef softmax_bench_result_t (softmax_bench_func_t)(float* dst, float* src, do
 /** Descriptor structure for softmax benchmark */
 typedef struct {
     softmax_bench_func_t* bench;
+    softmax_bench_result_t result;
     char label[100];
 } softmax_bench_t;
 
@@ -52,31 +53,62 @@ int main(void) {
         assert(src);
         assert(dst);
         assert(golden);
-        // random initialization of the input arrays
-        for (i = 0; i < n; ++i) {
-            src[i] = 2.f * rand() / (float) RAND_MAX - 1.f;
-        }
 
-        // printf("source matrix:\n");
-        // array_dump_fp32(src, n);
-
-        // computing golden value
-        softmax_baseline_fp32_fp64(golden, src, n);
-        // printf("golden result:\n");
-        // array_dump_fp64(golden, n);
-
-
-        // softmax benchmarks
+        // reset benchmark results
         for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(softmax_bench_t); benchId++)
         {
-            memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
-            softmax_bench_result_t bench_result = benchmarks[benchId].bench(dst, src, golden, n);
+            benchmarks[benchId].result.max_abs_error = 0.;
+            benchmarks[benchId].result.max_rel_error = 0.;
+            benchmarks[benchId].result.perf_count = 0;
+            benchmarks[benchId].result.error_norm2 = 0.f;
+        }
+
+        int j;
+        const int NUM_TESTS = 100;
+        const float UPPER_BOUND = 2.f;
+
+        for (j = 0; j < NUM_TESTS; ++j) {
+            // random initialization of the input arrays
+            for (i = 0; i < n; ++i) {
+                src[i] = 2.f * UPPER_BOUND * rand() / (float) RAND_MAX - UPPER_BOUND;
+            }
+
+            // computing golden value
+            softmax_baseline_fp32_fp64(golden, src, n);
+#           ifdef VERY_VERBOSE
+            printf("source matrix:\n");
+            array_dump_fp32(src, n);
+            printf("golden result:\n");
+            array_dump_fp64(golden, n);
+#           endif // VERY_VERBOSE
+
+            // softmax benchmarks. iterating over all existing implementation for this given input set
+            for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(softmax_bench_t); benchId++)
+            {
+                memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+
+                softmax_bench_result_t local_result = benchmarks[benchId].bench(dst, src, golden, n);
+
+                benchmarks[benchId].result = accumulate_bench_result(benchmarks[benchId].result, local_result);
+
+#               ifdef VERY_VERBOSE
+                printf("%s result:\n", benchmarks[benchId].label);
+                array_dump_fp32(dst, n);
+#               endif // VERY_VERBOSE
+
+            }
+        }
+
+        // display results
+        for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(softmax_bench_t); benchId++)
+        {
+            softmax_bench_result_t bench_result = benchmarks[benchId].result;
+            bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
+            bench_result.error_norm2 = sqrt(bench_result.error_norm2);
 
 
 #           ifdef VERBOSE 
             printf("--------------------------------------------------------------------------------\n");
-            // printf("%s result:\n", benchmarks[benchId].label);
-            // array_dump_fp32(dst, n);
             printf("%s used %d " PERF_METRIC "(s) to evaluate softmax on a %d-element array.\n",
                 benchmarks[benchId].label, bench_result.perf_count, n);
             printf(" " PERF_METRIC " per elements:    %.3f\n", (double) bench_result.perf_count / n);

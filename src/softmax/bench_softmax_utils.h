@@ -35,6 +35,15 @@ typedef struct {
     double error_norm2;
 } softmax_bench_result_t;
 
+static softmax_bench_result_t accumulate_bench_result(softmax_bench_result_t res, softmax_bench_result_t new_result) {
+  if (new_result.max_abs_error > res.max_abs_error) res.max_abs_error = new_result.max_abs_error;
+  if (new_result.max_rel_error > res.max_rel_error) res.max_rel_error = new_result.max_rel_error;
+  res.perf_count += new_result.perf_count;
+  res.error_norm2 += new_result.max_rel_error * new_result.max_rel_error;
+
+  return res;
+}
+
 
 /** Display the content of a binary32 n-element array */
 static void array_dump_fp32(float *array, size_t n)
