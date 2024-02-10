@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <math.h>
 
 /** generic type for a binary32/float softmax implementation */
 typedef void(softmax_func_t)(float* dst, float* src, size_t n);
