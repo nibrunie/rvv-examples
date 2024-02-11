@@ -33,6 +33,7 @@ typedef struct {
     unsigned long perf_count;
     double max_abs_error;
     double max_rel_error;
+    double mean_rel_error;
     double error_norm2;
 } softmax_bench_result_t;
 
@@ -41,6 +42,7 @@ static softmax_bench_result_t accumulate_bench_result(softmax_bench_result_t res
   if (new_result.max_rel_error > res.max_rel_error) res.max_rel_error = new_result.max_rel_error;
   res.perf_count += new_result.perf_count;
   res.error_norm2 += new_result.max_rel_error * new_result.max_rel_error;
+  res.mean_rel_error += new_result.mean_rel_error;
 
   return res;
 }
@@ -51,7 +53,7 @@ static void array_dump_fp32(float *array, size_t n)
 {
     size_t i;
     for (i = 0; i < n; ++i) {
-        printf(" %.3f ", array[i]);
+        printf(" %a ", array[i]);
     }
     printf("\n");
 }
@@ -61,7 +63,7 @@ static void array_dump_fp64(double *array, size_t n)
 {
     size_t i;
     for (i = 0; i < n; ++i) {
-        printf(" %.3f ", array[i]);
+        printf(" %a ", array[i]);
     }
     printf("\n");
 }

@@ -226,13 +226,13 @@ softmax_bench_result_t softmax_rvv_fp32_bench(float* dst, float* src, double* go
 }
 
 
-/** More accurate implementation of softmax for binary32 RVV-based
+/** More numerically stable implementation of softmax for binary32 RVV-based
  * 
  *  @param dst destination array
  *  @param src source array
  *  @param n   number of element(s)
 */
-void softmax_accurate_rvv_fp32(float* dst, float* src, size_t n)
+void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
 {
     // initializing temporary maximum vector
     // vlmax initialization is required in case the first vsetvl does
@@ -242,10 +242,6 @@ void softmax_accurate_rvv_fp32(float* dst, float* src, size_t n)
     vfloat32m1_t vmax = __riscv_vfmv_v_f_f32m1(-INFINITY, vlmax);
 
     size_t avl = n;
-    size_t vl = __riscv_vsetvl_e32m1(avl);
-    vmax = __riscv_vle32_v_f32m1_tu(vmax, src, vl);
-    avl -= vl;
-    src += vl;
 
     while (avl > 0) {
         size_t vl = __riscv_vsetvl_e32m1(avl);
@@ -257,11 +253,16 @@ void softmax_accurate_rvv_fp32(float* dst, float* src, size_t n)
     src -= n; // reseting source pointer
 
     // final maximum reduction
-    vfloat32m1_t vredmax = __riscv_vfmv_v_f_f32m1(0.f, vlmax);
+    vfloat32m1_t vredmax = __riscv_vfmv_v_f_f32m1(-INFINITY, vlmax);
     vredmax = __riscv_vfredmax(vmax, vredmax, vlmax);
     float max_x = __riscv_vfmv_f_s_f32m1_f32(vredmax);
 
-    // computing element-wise exponentials and their seum
+#ifdef VERY_VERBOSE
+    printf("max_x=%a\n", max_x );
+#endif
+
+    // Computing element-wise exponentials and their sum.
+    // max_x is subtracted from each element before computing the element-wise exponential.
     float sum = quick_dirty_vector_expf(dst, src, max_x, n);
 
     // computing the reciprocal of the sum of exponentials, once and for all
@@ -280,6 +281,6 @@ void softmax_accurate_rvv_fp32(float* dst, float* src, size_t n)
 }
 
 
-softmax_bench_result_t softmax_accurate_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n) {
-    return softmax_bench(dst, src, softmax_accurate_rvv_fp32, golden, n);
+softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n) {
+    return softmax_bench(dst, src, softmax_stable_rvv_fp32, golden, n);
 }

@@ -14,7 +14,9 @@ softmax_bench_result_t softmax_rvv_norm_fp32_bench(float* dst, float* src, doubl
 
 softmax_bench_result_t softmax_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n); 
 
-softmax_bench_result_t softmax_accurate_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n);
+softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n);
+
+softmax_bench_result_t softmax_scalar_quick_dirty_expf_fp32_bench(float* dst, float* src, double* golden, size_t n);
 
 typedef softmax_bench_result_t (softmax_bench_func_t)(float* dst, float* src, double* golden, size_t n);
 
@@ -28,17 +30,22 @@ typedef struct {
 
 extern void softmax_golden_fp32_fp64(double* dst, float* src, size_t n);
 
+#ifndef NUM_TESTS
+#define NUM_TESTS 100
+#endif
+
 
 int main(void) {
     int i;
     softmax_bench_t benchmarks[] = {
-        (softmax_bench_t){.bench = softmax_baseline_fp32_bench,     .label="baseline n-element softmax"},
-        (softmax_bench_t){.bench = softmax_rvv_norm_fp32_bench,     .label="rvv-based (norm only) n-element softmax"},
-        (softmax_bench_t){.bench = softmax_rvv_fp32_bench,          .label="rvv-based n-element softmax"},
-        (softmax_bench_t){.bench = softmax_accurate_rvv_fp32_bench, .label="rvv-based n-element accurate softmax"},
+        (softmax_bench_t){.bench = softmax_baseline_fp32_bench,                .label="baseline n-element softmax"},
+        (softmax_bench_t){.bench = softmax_scalar_quick_dirty_expf_fp32_bench, .label="scalar quick_dirty_expf n-element softmax"},
+        (softmax_bench_t){.bench = softmax_rvv_norm_fp32_bench,                .label="rvv-based (norm only) n-element softmax"},
+        (softmax_bench_t){.bench = softmax_rvv_fp32_bench,                     .label="rvv-based n-element softmax"},
+        (softmax_bench_t){.bench = softmax_stable_rvv_fp32_bench,              .label="rvv-based n-element stable softmax"},
     };
 
-    size_t testSizes[] = {4, 16, 17, 128, 129, 511, 512, 1024, 2048};
+    size_t testSizes[] = {4, 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];
@@ -64,13 +71,13 @@ int main(void) {
         }
 
         int j;
-        const int NUM_TESTS = 100;
-        const float UPPER_BOUND = 2.f;
+        const float RAND_LOWER_BOUND = -2.f;
+        const float RAND_RANGE = 4.f;
 
         for (j = 0; j < NUM_TESTS; ++j) {
             // random initialization of the input arrays
             for (i = 0; i < n; ++i) {
-                src[i] = 2.f * UPPER_BOUND * rand() / (float) RAND_MAX - UPPER_BOUND;
+                src[i] = RAND_RANGE * rand() / (float) RAND_MAX + RAND_LOWER_BOUND;
             }
 
             // computing golden value
@@ -105,6 +112,7 @@ int main(void) {
         {
             softmax_bench_result_t bench_result = benchmarks[benchId].result;
             bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
+            bench_result.mean_rel_error = bench_result.mean_rel_error / NUM_TESTS;
             bench_result.error_norm2 = sqrt(bench_result.error_norm2);
 
 
@@ -114,14 +122,15 @@ int main(void) {
                 benchmarks[benchId].label, bench_result.perf_count, n);
             printf(" " PERF_METRIC " per elements:    %.3f\n", (double) bench_result.perf_count / n);
             printf("  element(s) per " PERF_METRIC ": %.3f\n", (double) n / bench_result.perf_count);
-            printf("  max absolute error: %.4a\n", bench_result.max_abs_error);
-            printf("  max relative error: %.4a\n", bench_result.max_rel_error);
+            printf("  max absolute error:  %.4a\n", bench_result.max_abs_error);
+            printf("  max relative error:  %.4a\n", bench_result.max_rel_error);
+            printf("  mean relative error: %.4a\n", bench_result.mean_rel_error);
             printf("  error norm 2:       %.4a\n", bench_result.error_norm2);
 #           else
             // condensed display
-            printf("%s, %d, %d, %.3e, %.3e, %.3e\n", 
+            printf("%s, %d, %d, %.3e, %.3e, %.3e %.3e\n", 
                    benchmarks[benchId].label, n, bench_result.perf_count,
-                   bench_result.max_abs_error, bench_result.max_rel_error, bench_result.error_norm2);
+                   bench_result.max_abs_error, bench_result.max_rel_error, bench_result.error_norm2, bench_result.mean_rel_error);
 #           endif
         }
 
