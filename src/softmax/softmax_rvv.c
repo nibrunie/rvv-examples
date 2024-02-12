@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stddef.h>
+#include <fenv.h>
 #include <string.h>
 #include <inttypes.h>
 #include <riscv_vector.h>
@@ -104,17 +105,20 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     const vfloat32m1_t poly_c_5 = __riscv_vfmv_v_f_f32m1(0x1.114662p-7, vlmax);
     const vfloat32m1_t poly_c_6 = __riscv_vfmv_v_f_f32m1(0x1.7209d4p-10, vlmax);
     const vfloat32m1_t poly_c_7 = __riscv_vfmv_v_f_f32m1(0x1.94480ap-13, vlmax);
-
+  
+    // we need to make sure round-to-nearest is set, because we need
+    // it to be enforced for the conversion from vxiln2 to vk.
+    fesetround(FE_TONEAREST);
 
     size_t avl = n;
     while (avl > 0) {
         size_t vl = __riscv_vsetvl_e32m1(avl);
         vfloat32m1_t vx = __riscv_vle32_v_f32m1(src, vl);
-        vx= __riscv_vfsub(vx, max_x, vl);
+        vx = __riscv_vfsub(vx, max_x, vl);
 
         // argument reduction
         vfloat32m1_t vxiln2 = __riscv_vfmul(vx, iln2, vl);
-        vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1_rm(vxiln2, __RISCV_FRM_RNE, vl); // require round to nearest mode
+        vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1(vxiln2, vl); // require round to nearest mode
         vfloat32m1_t    vfk = __riscv_vfcvt_f_x_v_f32m1(vk, vl);
         // using vfnmsac.vf to evaluate r = x - k * log(2)
         vfloat32m1_t     vr = __riscv_vfnmsac(vx, ln2, vfk, vl);
