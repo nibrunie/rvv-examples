@@ -39,5 +39,5 @@ be `src/softmax` and execute a simple `make` command to build and run the exampl
 
 ```
 make clean
-make sim_bench_softmax EXTRA_CFLAGS="-DVERBOSE"
+make sim_bench_exp 
 ```
