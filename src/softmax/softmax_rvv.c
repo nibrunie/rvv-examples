@@ -169,7 +169,7 @@ void softmax_rvv_norm_fp32(float* dst, float* src, size_t n)
     // computing the sum of exponentials
     float sum = 0.f;
     for (i = 0; i < n; ++i) {
-        dst[i] = quick_dirty_expf(src[i]); //expf(src[i]);
+        dst[i] = expf(src[i]);
         sum += dst[i];
     }
 
