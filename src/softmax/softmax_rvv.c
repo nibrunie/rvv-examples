@@ -114,7 +114,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
 
         // argument reduction
         vfloat32m1_t vxiln2 = __riscv_vfmul(vx, iln2, vl);
-        vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1(vxiln2, vl); // require round to nearest mode
+        vint32m1_t       vk = __riscv_vfcvt_x_f_v_i32m1_rm(vxiln2, __RISCV_FRM_RNE, vl); // require round to nearest mode
         vfloat32m1_t    vfk = __riscv_vfcvt_f_x_v_f32m1(vk, vl);
         // using vfnmsac.vf to evaluate r = x - k * log(2)
         vfloat32m1_t     vr = __riscv_vfnmsac(vx, ln2, vfk, vl);
