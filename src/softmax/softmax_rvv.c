@@ -28,36 +28,28 @@ float quick_dirty_expf(float x) {
 
     // polynomial approximation exp(r)
     // coefficients determined using (python)sollya
-    // >>> ln2ov2 = sollya.round(sollya.log(2), sollya.binary32, sollya.RN)
-    // >>> approxInt = sollya.Interval(-ln2ov2, ln2ov2)
-    // >>> approxFun = sollya.exp(sollya.x)
-    // >>> degree = 7
+    // >>> ln2ov2 = sollya.round(sollya.log(2)/2, sollya.binary32, sollya.RN)
+    // >>> approxInterval = sollya.Interval(-ln2ov2, ln2ov2)
+    // >>> approxFunc = sollya.exp(sollya.x)
+    // >>> degree = 6
     // >>> poly = sollya.fpminimax(approxFunc,
     //                             degree,
     //                             [1] + [sollya.binary32] * degree,
     //                             approxInterval)
-    // 0x1p0 + _x_ * (0x1.000002p0 +
-    //         _x_ * (0x1.00001p-1 +
-    //         _x_ * (0x1.55546ep-3 +
-    //         _x_ * (0x1.554854p-5 +
-    //         _x_ * (0x1.114662p-7 +
-    //         _x_ * (0x1.7209d4p-10 +
-    //         _x_ * 0x1.94480ap-13))))))
     const float poly_coeffs[] = {
-        0x1.000002p0, 
-        0x1.00001p-1, 
-        0x1.55546ep-3, 
-        0x1.554854p-5, 
-        0x1.114662p-7, 
-        0x1.7209d4p-10, 
-        0x1.94480ap-13,
+        0x1p0, 
+        0x1.fffff8p-2, 
+        0x1.55548ep-3, 
+        0x1.555b98p-5, 
+        0x1.123bccp-7, 
+        0x1.6850e4p-10, 
     };
 
     const int poly_degree = POLY_DEGREE;
 
-    float poly_r = poly_coeffs[poly_degree];
+    float poly_r = poly_coeffs[poly_degree-1];
     int i = 0;
-    for (i = poly_degree - 1; i >= 0; i--) {
+    for (i = poly_degree - 2; i >= 0; i--) {
         // poly_r = poly_r * r + poly_coeffs[i];
         poly_r = fmaf(poly_r, r, poly_coeffs[i]);
     }
@@ -98,13 +90,12 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     vfloat32m1_t vsum = __riscv_vfmv_v_f_f32m1(0.f, vlmax);
 
     const vfloat32m1_t poly_c_0 = __riscv_vfmv_v_f_f32m1(0x1.p0, vlmax);
-    const vfloat32m1_t poly_c_1 = __riscv_vfmv_v_f_f32m1(0x1.000002p0, vlmax);
-    const vfloat32m1_t poly_c_2 = __riscv_vfmv_v_f_f32m1(0x1.00001p-1, vlmax);
-    const vfloat32m1_t poly_c_3 = __riscv_vfmv_v_f_f32m1(0x1.55546ep-3, vlmax);
-    const vfloat32m1_t poly_c_4 = __riscv_vfmv_v_f_f32m1(0x1.554854p-5, vlmax);
-    const vfloat32m1_t poly_c_5 = __riscv_vfmv_v_f_f32m1(0x1.114662p-7, vlmax);
-    const vfloat32m1_t poly_c_6 = __riscv_vfmv_v_f_f32m1(0x1.7209d4p-10, vlmax);
-    const vfloat32m1_t poly_c_7 = __riscv_vfmv_v_f_f32m1(0x1.94480ap-13, vlmax);
+    const vfloat32m1_t poly_c_1 = __riscv_vfmv_v_f_f32m1(0x1p0, vlmax);
+    const vfloat32m1_t poly_c_2 = __riscv_vfmv_v_f_f32m1(0x1.fffff8p-2, vlmax);
+    const vfloat32m1_t poly_c_3 = __riscv_vfmv_v_f_f32m1(0x1.55548ep-3, vlmax);
+    const vfloat32m1_t poly_c_4 = __riscv_vfmv_v_f_f32m1(0x1.555b98p-5, vlmax);
+    const vfloat32m1_t poly_c_5 = __riscv_vfmv_v_f_f32m1(0x1.123bccp-7, vlmax);
+    const vfloat32m1_t poly_c_6 = __riscv_vfmv_v_f_f32m1(0x1.6850e4p-10, vlmax);
   
     // we need to make sure round-to-nearest is set, because we need
     // it to be enforced for the conversion from vxiln2 to vk.
@@ -124,8 +115,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
         vfloat32m1_t     vr = __riscv_vfnmsac(vx, ln2, vfk, vl);
 
         // polynomial approximation exp(r)
-        vfloat32m1_t poly_vr = poly_c_7;
-        poly_vr = __riscv_vfmadd(poly_vr, vr, poly_c_6, vl);
+        vfloat32m1_t poly_vr = poly_c_6;
         poly_vr = __riscv_vfmadd(poly_vr, vr, poly_c_5, vl);
         poly_vr = __riscv_vfmadd(poly_vr, vr, poly_c_4, vl);
         poly_vr = __riscv_vfmadd(poly_vr, vr, poly_c_3, vl);
