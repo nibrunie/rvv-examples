@@ -20,5 +20,5 @@ The easiest way to build and run the example is to run them in a docker containe
 By running the following command while at the top of the `./rvv-examples` directory you can bind the full directory content to the directory `/home/app` within the container. Any modification made within the container will be visible outside of it (and the opposite is also true).
 
 ```
-docker run  -ti --mount type=bind,source="$(pwd)"/,target=/home/app/ riscv:riscv-toolchain-20231122
+docker run  -ti --mount type=bind,source="$(pwd)"/,target=/home/app/ riscv:riscv-toolchain
 ```
