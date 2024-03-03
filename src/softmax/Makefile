@@ -17,7 +17,8 @@ OPT=-O2
 #RVV=v
 RVV=_xtheadvector
 
-EXTRA_CFLAGS?=-DCOUNT_INSTRET
+#EXTRA_CFLAGS?=-DCOUNT_INSTRET
+EXTRA_CFLAGS?=-DCOUNT_CYCLE
 
 # architectural parameters for the simulation
 # width of vector registers (VLEN)
