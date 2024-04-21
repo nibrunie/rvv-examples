@@ -10,6 +10,8 @@
 /** Declaring various softmax implementation benchmarks **/
 poly_mult_bench_result_t poly_mult_baseline_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_scalar_opt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
+
 typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
