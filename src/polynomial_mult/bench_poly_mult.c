@@ -26,25 +26,27 @@ extern void poly_mult_baseline(polynomial_t* dst, polynomial_t lhs, polynomial_t
 /** Display the content of a polynomial on stdout */
 void poly_dump(polynomial_t poly)
 {
-    int i;
-    for (i = 0; i <= poly.degree; ++i) {
-        printf(" %d . X^%d ", poly.coeffs[i], i);
+    int i = 0;
+    printf(" %d . X^%d ", poly.coeffs[i], i);
+    for (i = 1; i <= poly.degree; ++i) {
+        printf("+ %d . X^%d ", poly.coeffs[i], i);
     }
     printf("\n");
 }
 
 #ifndef NUM_TESTS
-#define NUM_TESTS 100
+#define NUM_TESTS 10
 #endif
 
 
 int main(void) {
     int i;
     poly_mult_bench_t benchmarks[] = {
-        (poly_mult_bench_t){.bench = poly_mult_baseline_bench, .label="baseline polynomial multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_baseline_bench,   .label="baseline polynomial multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_scalar_opt_bench, .label="optimized scalar polynomial multiplication"},
     };
 
-    size_t testSizes[] = {4}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
+    size_t testSizes[] = {4, 16, 511}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];
@@ -114,11 +116,11 @@ int main(void) {
 
 #           ifdef VERBOSE 
             printf("--------------------------------------------------------------------------------\n");
-            printf("%s used %d " PERF_METRIC "(s) to evaluate softmax on a %d-element array.\n",
+            printf("%s used %d " PERF_METRIC "(s) to evaluate multiplication on a degree %d polynomial.\n",
                 benchmarks[benchId].label, bench_result.perf_count, n);
-            printf(" " PERF_METRIC " per elements:    %.3f\n", (double) bench_result.perf_count / n);
+            printf(" " PERF_METRIC " per degree:    %.3f\n", (double) bench_result.perf_count / n);
             printf("  element(s) per " PERF_METRIC ": %.3f\n", (double) n / bench_result.perf_count);
-            printf("  errors:  %.4a\n", bench_result.errors);
+            printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
             printf("%s, %d, %d, %d\n", 

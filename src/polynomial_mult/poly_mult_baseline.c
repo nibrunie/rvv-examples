@@ -1,13 +1,15 @@
 #include <math.h>
 #include <stddef.h>
+#include <assert.h>
+
 #include <bench_poly_mult_utils.h>
 
 
 /** Baseline implementation of polynomial multiplication
- * 
- *  @param dst destination array
- *  @param src source array
- *  @param n   number of element(s)
+ *
+ * @param dst destination polynomial
+ * @param lhs left hand side input polynomial
+ * @param rhs right hand side input polynomial
 */
 void poly_mult_baseline(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs)
 {

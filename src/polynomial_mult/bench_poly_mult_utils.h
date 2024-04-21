@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 typedef struct {
   int degree;
@@ -8,20 +10,20 @@ typedef struct {
   uint32_t* coeffs;
 } polynomial_t;
 
-polynomial_t allocate_poly(int degree, int modulo) {
+static polynomial_t allocate_poly(int degree, int modulo) {
   polynomial_t res;
   res.degree = degree;
   res.modulo = modulo;
-  res.coeffs = (uint32_t*) malloc(sizeof(uint32_t) * degree);
+  res.coeffs = (uint32_t*) malloc(sizeof(uint32_t) * (degree+1));
   return res;
 }
 
-void randomize_poly(polynomial_t dst) {
+static void randomize_poly(polynomial_t dst) {
   int k;
   for (k = 0; k <= dst.degree; ++k) dst.coeffs[k] = rand() % dst.modulo;
 }
 
-int compare_poly(polynomial_t lhs, polynomial_t rhs) {
+static int compare_poly(polynomial_t lhs, polynomial_t rhs) {
   if (lhs.degree != rhs.degree) return -1;
   int k;
   for (k = 0; k < lhs.degree; ++k) {
