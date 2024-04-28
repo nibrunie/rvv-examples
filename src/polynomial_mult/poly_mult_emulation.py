@@ -2,11 +2,16 @@
 import random
 
 class Ring:
-    def __init__(self, modulo, rootOfUnity, invRootOfUnity):
+    """ Extended Ring structure """
+    def __init__(self, modulo, degree, rootOfUnity, invRootOfUnity, invDegree):
         self.modulo = modulo
+        self.degree = self.elt(degree)
+        self.invDegree = self.elt(invDegree)
         self.rootOfUnity = self.elt(rootOfUnity)
         self.invRootOfUnity = self.elt(invRootOfUnity)
         assert (rootOfUnity * invRootOfUnity) % modulo == 1
+        assert (rootOfUnity ** degree) % modulo == 1
+        assert (degree * invDegree) % modulo == 1
 
     def elt(self, value):
         if isinstance(value, RingElt):
@@ -19,6 +24,9 @@ class Ring:
     @property
     def zero(self):
         return RingElt(0, self)
+
+    def __repr__(self) -> str:
+        return f"Ring Z/{self.modulo}.Z"
 
 
 class RingElt:
@@ -57,7 +65,7 @@ class RingElt:
             return self.value == value.value
         raise NotImplementedError
         
-DefaultRing = Ring(19, 11, 7)
+DefaultRing = Ring(19, 3, 11, 7, 13)
 
 class Polynomial:
     def __init__(self, coeffs, eltRing = DefaultRing):
@@ -161,47 +169,38 @@ def ntt_transform(poly: Polynomial) -> NTTDomain:
         ntt_coeffs.append(ntt_coeff)
     return NTTDomain(ntt_coeffs, poly.eltRing)
 
-def ntt_inv_transform(ntt: NTTDomain, invN) -> Polynomial:
+def ntt_inv_transform(ntt: NTTDomain) -> Polynomial:
     poly_coeffs = []
     for k in range(len(ntt.coeffs)):
         poly_coeff = ntt.eltRing.elt(0)
         for j in range(len(ntt.coeffs)):
             poly_coeff += ntt.coeffs[j] * ntt.eltRing.invRootOfUnity ** (j * k)
-        poly_coeffs.append(invN * poly_coeff)
+        poly_coeffs.append(ntt.eltRing.invDegree * poly_coeff)
     return Polynomial(poly_coeffs, ntt.eltRing)
 
 
 if __name__ == "__main__":
+    print(f"coefficient arithmetic is done in {DefaultRing}")
+    # declaring basis polynomial
     mod = Polynomial.monomial(3, DefaultRing) + Polynomial.constant(-1, DefaultRing)
+
+    # display of various objects and operations (no self check [yet ?])
+
+    # simple polynomials and basic arithmetic on them
     a = Polynomial([DefaultRing.elt(1), DefaultRing.elt(1)])
-    print(a)
-    print(a * a)
-    print(a - a)
-    print((a * a) % a)
-    print(Polynomial.monomial(256, DefaultRing))
-    print(mod)
-    print(Polynomial.monomial(257, DefaultRing) % mod)
-    poly0 = Polynomial.monomial(2, DefaultRing) + Polynomial.monomial(1, DefaultRing)
-    ntt0 = ntt_transform(poly0)
-    inv_ntt0 = ntt_inv_transform(ntt0, invN=DefaultRing.elt(13))
-    print(poly0)
-    print(ntt0.coeffs)
-    print(inv_ntt0)
-    poly1 = Polynomial.monomial(2, DefaultRing)
-    ntt1 = ntt_transform(poly1)
-    inv_ntt1 = ntt_inv_transform(ntt1, invN=DefaultRing.elt(13))
-    print(poly0 + poly1)
-    print(ntt_inv_transform(ntt0 + ntt1, invN=DefaultRing.elt(13)))
-    print((poly0 * poly1))
-    print((poly0 * poly1) % mod)
-    print(ntt_inv_transform(ntt0 * ntt1, invN=DefaultRing.elt(13)))
+    print(f"a = X + 1 = {a}")
+    print(f"a * a = {a * a}")
+    print(f"a - a = 0 = {a - a}")
+    print(f"(a * a) % a = {(a * a) % a}")
+    print(f"X^256 = {Polynomial.monomial(256, DefaultRing)}")
+    print(f"mod = {mod}")
+    print("f X^257 % mod = {Polynomial.monomial(257, DefaultRing) % mod}")
 
-    print(Polynomial.random(2, DefaultRing))
-    print(Polynomial.random(2, DefaultRing))
-
+    # Random polynomial and basic NTT testing
     polys = [Polynomial.random(2, DefaultRing) for _ in range(2)]
+    print(f"Random polys[:] = {list(str(p) for p in polys)}")
     ntts = [ntt_transform(poly) for poly in polys]
-    print(polys[0] + polys[1])
-    print(ntt_inv_transform(ntts[0] + ntts[1], invN=DefaultRing.elt(13)))
-    print((polys[0] * polys[1]) % mod)
-    print(ntt_inv_transform(ntts[0] * ntts[1], invN=DefaultRing.elt(13)))
+    print(f"polys[0] + polys[1] = {polys[0] + polys[1]} (direct addition)" )
+    print(f"polys[0] + polys[1] = {ntt_inv_transform(ntts[0] + ntts[1])} (ntt -> addition -> inv ntt)" )
+    print(f"polys[0] * polys[1] % mod = {(polys[0] * polys[1]) % mod} (direct modulo multiplication)" )
+    print(f"polys[0] * polys[1] % mod = {ntt_inv_transform(ntts[0] * ntts[1])} (ntt -> multiplication -> inv ntt)" )
