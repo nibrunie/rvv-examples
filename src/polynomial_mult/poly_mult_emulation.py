@@ -9,15 +9,26 @@ class Ring:
         self.invDegree = self.elt(invDegree)
         self.rootOfUnity = self.elt(rootOfUnity)
         self.invRootOfUnity = self.elt(invRootOfUnity)
-        if not invRootOfUnity is None: assert (rootOfUnity * invRootOfUnity) % modulo == 1
+        if not invRootOfUnity is None: assert (self.rootOfUnity * self.invRootOfUnity).value == 1
         assert (self.rootOfUnity ** degree).value % modulo == 1
         if not invDegree is None: assert (degree * invDegree) % modulo == 1
+        for k in range(1, degree):
+            n = sum([self.rootOfUnity**(j*k) for j in range(degree)], self.elt(0))
+            assert (n.value % self.modulo) == 0
+
+    @staticmethod
+    def fromModulo(modulo, degree):
+        rootOfUnity = [v for v in range(2, modulo) if (v ** degree) % modulo == 1][0]
+        invRootOfUnity = [v for v in range(2, modulo) if (v * rootOfUnity) % modulo == 1][0]
+        invDegree = [v for v in range(2, modulo) if (v * degree) % modulo == 1][0]
+        return Ring(modulo, degree, rootOfUnity, invRootOfUnity, invDegree)
+
 
     def elt(self, value):
         """ build and encapsulate an element to the Ring @p self """
         if isinstance(value, RingElt):
             # assert value.ring == self
-            return value
+            return RingElt(value.value, self) # possible Ring change
         if isinstance(value, int):
             return RingElt(value, self)
         if value is None:
@@ -27,7 +38,7 @@ class Ring:
 
     def powerRing(self):
         """ sub-ring with half the degreee and the square of the root of unity"""
-        return Ring(self.modulo, self.degree.value // 2, self.rootOfUnity ** 2, None, None)
+        return Ring(self.modulo, self.degree.value // 2, self.rootOfUnity ** 2, self.invRootOfUnity**2, None)
 
     def __eq__(lhs, rhs) -> bool:
         """ testing Ring equality """
@@ -40,7 +51,7 @@ class Ring:
         return RingElt(0, self)
 
     def __repr__(self) -> str:
-        return f"Ring Z/{self.modulo}.Z"
+        return f"Ring Z/{self.modulo}.Z degree={self.degree} rootOfUnity={self.rootOfUnity}, invRootOfUnity={self.invRootOfUnity}, invDegree={self.invDegree}"
 
 
 class RingElt:
@@ -67,7 +78,8 @@ class RingElt:
         if n == 1:
             return self
         if n > 1:
-            return self * self**(n-1)
+            half = self ** (n // 2)
+            return (half * half) * self**(n % 2)
         raise NotImplementedError("power must be positive")
 
     def __neg__(self):
@@ -134,7 +146,10 @@ class Polynomial:
             return "0"
         cst = [] if self.coeffs[0] == 0 else [f"{self.coeffs[0]}"]
         degree1 = [] if self.degree < 1 else ([] if self.coeffs[1] == 0 else ["X" if self.coeffs[1] == 1 else f"{self.coeffs[1]}.X"])
-        return " + ".join(cst + degree1 + [f"X^{i}" if v == 1 else f"{v}.X^{i}" for (i, v) in filter((lambda v: v[1] != 0), enumerate(self.coeffs[2:], 2))])
+        # omitting intermediary coefficients when the polynomial is too large
+        startDegree = max(self.degree - 3, 3)
+        ellipsis = ["..."] if startDegree > 3 else []
+        return " + ".join(cst + degree1 + ellipsis + [f"X^{i}" if v == 1 else f"{v}.X^{i}" for (i, v) in filter((lambda v: v[1] != 0), enumerate(self.coeffs[startDegree:], startDegree))])
 
     def isZero(self):
         return all(v == 0 for v in self.coeffs)
@@ -215,21 +230,23 @@ def fast_ntt_transform(poly: Polynomial, inv: bool = False) -> NTTDomain:
         # print(f"fast NTT: even degree {poly.degree}, fall back to slow NTT")
         # only works if the polynomial has an even number of coefficients
         # else fallback to slow method
+        print(f"slow: {poly.degree}")
         return ntt_transform(poly)
     else:
         # print("fast NTT: split and reconstruction")
         poly_even = poly.extractEven()
         poly_odd = poly.extractOdd()
         # recursive NTT
-        ntt_even = fast_ntt_transform(poly_even)
-        ntt_odd = fast_ntt_transform(poly_odd)
+        ntt_even = fast_ntt_transform(poly_even, inv)
+        ntt_odd = fast_ntt_transform(poly_odd, inv)
         # reconstruction
         ntt_coeffs = []
         half_degree = (poly.degree + 1) // 2
+        # print(poly.degree, half_degree)
         for i in range(poly.degree + 1):        
             j = i % half_degree
-            even_coeff = ntt_even.coeffs[j] 
-            odd_coeff = ntt_odd.coeffs[j] 
+            even_coeff = poly.eltRing.elt(ntt_even.coeffs[j])
+            odd_coeff = poly.eltRing.elt(ntt_odd.coeffs[j])
             twiddle = (poly.eltRing.invRootOfUnity if inv else poly.eltRing.rootOfUnity) ** j
             if i >= half_degree:
                 twiddle = -twiddle
@@ -254,6 +271,10 @@ if __name__ == "__main__":
     # mod = Polynomial.monomial(3, DefaultRing) + Polynomial.constant(-1, DefaultRing)
     DefaultRing = Ring(3329, 4, (17 ** 64) % 3329, 1600, 2497)
     mod = Polynomial.monomial(4, DefaultRing) + Polynomial.constant(-1, DefaultRing)
+    print(f"DefaultRing={DefaultRing}")
+
+    kyberRing = Ring.fromModulo(3329, 128)
+    print(f"kyberRing={kyberRing}")
 
     print(f"coefficient arithmetic is done in {DefaultRing}")
 
@@ -267,10 +288,14 @@ if __name__ == "__main__":
     print(f"(a * a) % a = {(a * a) % a}")
     print(f"X^256 = {Polynomial.monomial(256, DefaultRing)}")
     print(f"mod = {mod}")
-    print("f X^257 % mod = {Polynomial.monomial(257, DefaultRing) % mod}")
+    print(f"X^257 % mod = {Polynomial.monomial(257, DefaultRing) % mod}")
+
+    DefaultRing = kyberRing
+    mod = Polynomial.monomial(DefaultRing.degree.value, DefaultRing) + Polynomial.constant(-1, DefaultRing)
+    print(f"coefficient arithmetic is done in {DefaultRing}")
 
     # Random polynomial and basic NTT testing
-    polys = [Polynomial.random(3, DefaultRing) for _ in range(2)]
+    polys = [Polynomial.random(DefaultRing.degree.value - 1, DefaultRing) for _ in range(2)]
     print(f"Random polys[:] = {list(str(p) for p in polys)}")
     ntts = [ntt_transform(poly) for poly in polys]
     print(f"ntt_transform(polys[0) = {ntts[0].coeffs}")
@@ -285,3 +310,4 @@ if __name__ == "__main__":
     fast_ntts = [fast_ntt_transform(poly) for poly in polys]
     print(f"polys[0] * polys[1] % mod = {ntt_inv_transform(fast_ntts[0] * fast_ntts[1])} (fast ntt -> multiplication -> inv ntt)" )
     print(f"polys[0] * polys[1] % mod = {fast_inv_ntt_transform(fast_ntts[0] * fast_ntts[1])} (fast ntt -> multiplication -> fast inv ntt)" )
+    print(f"polys[0] * polys[1] % mod = {fast_inv_ntt_transform(ntts[0] * ntts[1])} (ntt -> multiplication -> fast inv ntt)" )
