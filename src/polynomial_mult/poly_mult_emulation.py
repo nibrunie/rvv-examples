@@ -14,6 +14,7 @@ class Ring:
         if not invDegree is None: assert (degree * invDegree) % modulo == 1
 
     def elt(self, value):
+        """ build and encapsulate an element to the Ring @p self """
         if isinstance(value, RingElt):
             # assert value.ring == self
             return value
@@ -29,11 +30,13 @@ class Ring:
         return Ring(self.modulo, self.degree.value // 2, self.rootOfUnity ** 2, None, None)
 
     def __eq__(lhs, rhs) -> bool:
+        """ testing Ring equality """
         # limiting equality check to modulo, degree and rootOfUnity
         return lhs.modulo == rhs.modulo and lhs.rootOfUnity == rhs.rootOfUnity and lhs.degree == rhs.degree
 
     @property
     def zero(self):
+        """ build element zero of Ring @p self """
         return RingElt(0, self)
 
     def __repr__(self) -> str:
@@ -41,6 +44,7 @@ class Ring:
 
 
 class RingElt:
+    """ Ring element """
     def __init__(self, value, ring):
         self.value = value
         self.ring = ring
@@ -81,6 +85,7 @@ class RingElt:
         
 
 class Polynomial:
+    """ Structure to encode a Polynomial object """
     def __init__(self, coeffs, eltRing: Ring):
         self.degree = len(coeffs) - 1
         self.coeffs = [eltRing.elt(v) for v in coeffs]
@@ -155,6 +160,7 @@ class Polynomial:
         return Polynomial([random.randrange(eltRing.modulo) for d in range(degree + 1)], eltRing)
 
 class NTTDomain:
+    """ Structure to encode a value in the NTT domain """
     def __init__(self, coeffs, eltRing):
         self.degree = len(coeffs) - 1
         self.coeffs = [eltRing.elt(v) for v in coeffs]
@@ -191,6 +197,7 @@ def ntt_transform(poly: Polynomial) -> NTTDomain:
     return NTTDomain(ntt_coeffs, poly.eltRing)
 
 def ntt_inv_transform(ntt: NTTDomain) -> Polynomial:
+    """ Inverse Number Theoretic Transform """
     poly_coeffs = []
     for k in range(len(ntt.coeffs)):
         poly_coeff = ntt.eltRing.elt(0)
@@ -199,18 +206,18 @@ def ntt_inv_transform(ntt: NTTDomain) -> Polynomial:
         poly_coeffs.append(ntt.eltRing.invDegree * poly_coeff)
     return Polynomial(poly_coeffs, ntt.eltRing)
 
-def fast_ntt_transform(poly: Polynomial) -> NTTDomain:
-    """ """
+def fast_ntt_transform(poly: Polynomial, inv: bool = False) -> NTTDomain:
+    """ fast implementation of NTT (based on Cooler-Tukey FFT algorithm) """
     if poly.degree == 0:
-        print("fast NTT: level 1 reached")
+        # print("fast NTT: level 1 reached")
         return NTTDomain(poly.coeffs[:1], poly.eltRing)
     if poly.degree % 2 == 0:
-        print(f"fast NTT: even degree {poly.degree}, fall back to slow NTT")
+        # print(f"fast NTT: even degree {poly.degree}, fall back to slow NTT")
         # only works if the polynomial has an even number of coefficients
         # else fallback to slow method
         return ntt_transform(poly)
     else:
-        print("fast NTT: split and reconstruction")
+        # print("fast NTT: split and reconstruction")
         poly_even = poly.extractEven()
         poly_odd = poly.extractOdd()
         # recursive NTT
@@ -223,13 +230,22 @@ def fast_ntt_transform(poly: Polynomial) -> NTTDomain:
             j = i % half_degree
             even_coeff = ntt_even.coeffs[j] 
             odd_coeff = ntt_odd.coeffs[j] 
-            twiddle = poly.eltRing.rootOfUnity ** j 
+            twiddle = (poly.eltRing.invRootOfUnity if inv else poly.eltRing.rootOfUnity) ** j
             if i >= half_degree:
                 twiddle = -twiddle
             ntt_coeff = even_coeff + twiddle * odd_coeff
             ntt_coeffs.append(ntt_coeff)
         return NTTDomain(ntt_coeffs, poly.eltRing)
 
+
+def fast_inv_ntt_transform(ntt: NTTDomain) -> Polynomial:
+    """ Fast implementation of the inverse Number Theoretic Transform (NTT) """
+    # re-using the Fast NTT implementation: transforming the input NTT representation
+    # to a dummy polynomial so we can execute the fast NTT transform and then transforming back
+    # the result representation in NTT domain to the output polynomial (while scaling by 1 / (degree+1))
+    dummy_poly = Polynomial(ntt.coeffs, ntt.eltRing) 
+    pre_poly_coeffs = fast_ntt_transform(dummy_poly, inv=True)
+    return Polynomial([c * dummy_poly.eltRing.invDegree for c in pre_poly_coeffs.coeffs], ntt.eltRing)
 
 
 if __name__ == "__main__":
@@ -257,10 +273,15 @@ if __name__ == "__main__":
     polys = [Polynomial.random(3, DefaultRing) for _ in range(2)]
     print(f"Random polys[:] = {list(str(p) for p in polys)}")
     ntts = [ntt_transform(poly) for poly in polys]
+    print(f"ntt_transform(polys[0) = {ntts[0].coeffs}")
+    print(f"fast_ntt_transform(polys[0) = {fast_ntt_transform(polys[0]).coeffs}")
+
     print(f"polys[0] + polys[1] = {polys[0] + polys[1]} (direct addition)" )
     print(f"polys[0] + polys[1] = {ntt_inv_transform(ntts[0] + ntts[1])} (ntt -> addition -> inv ntt)" )
     print(f"polys[0] * polys[1] % mod = {(polys[0] * polys[1]) % mod} (direct modulo multiplication)" )
     print(f"polys[0] * polys[1] % mod = {ntt_inv_transform(ntts[0] * ntts[1])} (ntt -> multiplication -> inv ntt)" )
 
-    print(f"ntt_transform(polys[0) = {ntts[0].coeffs}")
-    print(f"fast_ntt_transform(polys[0) = {fast_ntt_transform(polys[0]).coeffs}")
+    # fast NTT testing
+    fast_ntts = [fast_ntt_transform(poly) for poly in polys]
+    print(f"polys[0] * polys[1] % mod = {ntt_inv_transform(fast_ntts[0] * fast_ntts[1])} (fast ntt -> multiplication -> inv ntt)" )
+    print(f"polys[0] * polys[1] % mod = {fast_inv_ntt_transform(fast_ntts[0] * fast_ntts[1])} (fast ntt -> multiplication -> fast inv ntt)" )
