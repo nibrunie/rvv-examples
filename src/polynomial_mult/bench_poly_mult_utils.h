@@ -5,6 +5,14 @@
 #include <stdlib.h>
 
 typedef struct {
+  int n;
+  uint32_t modulo;
+  uint32_t rootOfUnity;
+  uint32_t invRootOfUnity;
+  uint32_t invDegree;
+} ring_t;
+
+typedef struct {
   int degree;
   uint32_t modulo;
   uint32_t* coeffs;
@@ -30,6 +38,17 @@ static int compare_poly(polynomial_t lhs, polynomial_t rhs) {
     if (lhs.coeffs[k] != rhs.coeffs[k]) return -(k+1); // non-zero error code
   };
   return 0; // success
+}
+
+static void print_poly(char* label, polynomial_t poly) {
+  printf("%s: ", label);
+  if (poly.coeffs[0] != 0) printf("%u", poly.coeffs[0]);
+  if (poly.coeffs[1] != 0) printf(" + %u.X", poly.coeffs[1]);
+  int i;
+  for (i = 2; i <= poly.degree; ++i) {
+    if (poly.coeffs[i] != 0) printf(" + %u.X^%d", poly.coeffs[i], i);
+  }
+  printf("\n");
 }
 
 /** generic type for a polynomial multiplication implementation */

@@ -33,10 +33,16 @@ poly_mult_rvv.o: poly_mult_rvv.c
 bench_poly_mult: bench_poly_mult.c poly_mult_baseline.o poly_mult_rvv.o
 	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
+basic_poly_test: basic_poly_test.c poly_mult_baseline.o
+	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+
 sim_bench_poly_mult: bench_poly_mult
 	$(SIMULATOR) $^
 
-clean:
-	rm -f *.o bench_poly_mult 
+sim_basic_poly_test: basic_poly_test
+	$(SIMULATOR) $^
 
-.PHONY: sim_bench_poly_mult clean
+clean:
+	rm -f *.o bench_poly_mult  basic_poly_test
+
+.PHONY: sim_bench_poly_mult sim_basic_poly_test clean
