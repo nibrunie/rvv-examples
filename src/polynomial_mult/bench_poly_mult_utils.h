@@ -6,23 +6,25 @@
 
 typedef struct {
   int n;
-  uint32_t modulo;
-  uint32_t rootOfUnity;
-  uint32_t invRootOfUnity;
-  uint32_t invDegree;
+  int modulo;
+  int rootOfUnity;
+  int invRootOfUnity;
+  int invDegree;
 } ring_t;
 
 typedef struct {
   int degree;
-  uint32_t modulo;
-  uint32_t* coeffs;
+  int modulo;
+  int* coeffs;
 } polynomial_t;
+
+typedef polynomial_t ntt_t;
 
 static polynomial_t allocate_poly(int degree, int modulo) {
   polynomial_t res;
   res.degree = degree;
   res.modulo = modulo;
-  res.coeffs = (uint32_t*) malloc(sizeof(uint32_t) * (degree+1));
+  res.coeffs = (int*) malloc(sizeof(int) * (degree+1));
   return res;
 }
 
@@ -41,12 +43,12 @@ static int compare_poly(polynomial_t lhs, polynomial_t rhs) {
 }
 
 static void print_poly(char* label, polynomial_t poly) {
-  printf("%s: ", label);
-  if (poly.coeffs[0] != 0) printf("%u", poly.coeffs[0]);
-  if (poly.coeffs[1] != 0) printf(" + %u.X", poly.coeffs[1]);
+  printf("%s (degree=%d): ", label, poly.degree);
+  if (poly.coeffs[0] != 0) printf("%d", poly.coeffs[0]);
+  if (poly.coeffs[1] != 0) printf(" + %d.X", poly.coeffs[1]);
   int i;
   for (i = 2; i <= poly.degree; ++i) {
-    if (poly.coeffs[i] != 0) printf(" + %u.X^%d", poly.coeffs[i], i);
+    if (poly.coeffs[i] != 0) printf(" + %d.X^%d", poly.coeffs[i], i);
   }
   printf("\n");
 }

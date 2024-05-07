@@ -54,7 +54,7 @@ void poly_add_baseline(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs)
 /** Basic polynomial in-place mul-sub
  *  dst <- dst - factor . X^power . multiplicand
 */
-void poly_in_place_mul_sub(polynomial_t* dst, polynomial_t multiplicand, uint32_t factor, int power)
+void poly_in_place_mul_sub(polynomial_t* dst, polynomial_t multiplicand, int factor, int power)
 {
     int d;
     assert(dst->modulo == multiplicand.modulo);
@@ -77,24 +77,30 @@ int poly_max_non_zero_degree(polynomial_t poly) {
     return max_non_zero_degree;
 }
 
-/** Polynomial in-place modulo operation */
+/** Polynomial in-place modulo operation
+ *  dst <- (dst % modulo)
+*/
 void poly_in_place_mod(polynomial_t* dst, polynomial_t modulo) {
     int max_non_zero_src_degree = poly_max_non_zero_degree(*dst);
     int max_non_zero_mod_degree = poly_max_non_zero_degree(modulo);
+    assert(modulo.coeffs[max_non_zero_mod_degree] == 1);
 
     while (max_non_zero_src_degree >= max_non_zero_mod_degree) {
-        uint32_t factor = dst->coeffs[max_non_zero_src_degree];
+        int factor = dst->coeffs[max_non_zero_src_degree];
 
         if (dst->coeffs[max_non_zero_src_degree]) {
             // dst <- dst - facto * X^(max_non_zero_src_degree - max_non_zero_mode_degree * modulo
             poly_in_place_mul_sub(dst, modulo, factor, max_non_zero_src_degree - max_non_zero_mod_degree);
+            assert(dst->coeffs[max_non_zero_src_degree] == 0);
         }
         max_non_zero_src_degree--;
     }
 }
 
 
-/** Polynomial modulo operation */
+/** Polynomial modulo operation
+ *  dst <- (src % modulo)
+ */
 void poly_mod(polynomial_t* dst, polynomial_t src, polynomial_t modulo)
 {
     int d;
