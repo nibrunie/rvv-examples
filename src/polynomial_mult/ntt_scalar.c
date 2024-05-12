@@ -131,8 +131,6 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring) {
     // inverse NTT transform can be performed by doing NTT with 1/root as initial root of unity
     // and then dividing by the number of coefficients
     poly_fast_ntt_transform(dst, src, ring, ring.invRootOfUnity);
-    print_poly("(pa * pb)'s inv NTT (fast)", *dst);
-    printf("src.degree=%d, ring.invRootOfUnity=%d\n", src.degree, ring.invRootOfUnity);
     int d;
     for (d = 0; d <= src.degree; d++) {
         dst->coeffs[d] *= ring.invDegree;
@@ -154,6 +152,8 @@ void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polyno
 
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
     poly_ntt_inv_transform(dst, ntt_lhs_times_rhs, ring);
+
+    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be free (or statically allocated)
 }
 
 void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
@@ -169,5 +169,8 @@ void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, p
     poly_fast_ntt_transform(&ntt_rhs, rhs, ring, ring.rootOfUnity);
 
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
+
     poly_fast_inv_ntt_tranform(dst, ntt_lhs_times_rhs, ring);
+
+    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be free (or statically allocated)
 }
