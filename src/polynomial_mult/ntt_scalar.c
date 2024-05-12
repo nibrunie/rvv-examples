@@ -141,7 +141,10 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring) {
 }
 
 void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // FIXME: ring structure should be a function argument
+    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // X^128 - 1 Ring:
+    ring_t ring = {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     ntt_t ntt_rhs = allocate_poly(rhs.degree, 3329);
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
@@ -151,4 +154,20 @@ void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polyno
 
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
     poly_ntt_inv_transform(dst, ntt_lhs_times_rhs, ring);
+}
+
+void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    // FIXME: ring structure should be a function argument
+    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // X^128 - 1 Ring:
+    ring_t ring = {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    ntt_t ntt_rhs = allocate_poly(rhs.degree, 3329);
+    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+
+    poly_fast_ntt_transform(&ntt_lhs, lhs, ring, ring.rootOfUnity);
+    poly_fast_ntt_transform(&ntt_rhs, rhs, ring, ring.rootOfUnity);
+
+    ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
+    poly_fast_inv_ntt_tranform(dst, ntt_lhs_times_rhs, ring);
 }
