@@ -100,7 +100,7 @@ void poly_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring) {
 }
 
 void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
-    assert(dst->degree == lhs.degree && dst->degree == rhs.degree);
+    assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
 
     int d;
     for (d = 0; d <= dst->degree; d++) {
@@ -138,4 +138,17 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring) {
         dst->coeffs[d] *= ring.invDegree;
         dst->coeffs[d] %= ring.modulo;
     }
+}
+
+void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    ntt_t ntt_rhs = allocate_poly(rhs.degree, 3329);
+    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+
+    poly_ntt_transform(&ntt_lhs, lhs, ring);
+    poly_ntt_transform(&ntt_rhs, rhs, ring);
+
+    ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
+    poly_ntt_inv_transform(dst, ntt_lhs_times_rhs, ring);
 }
