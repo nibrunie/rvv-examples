@@ -40,28 +40,35 @@ static int ring_power(ring_t ring, int lhs, int n) {
     }
 }
 
-/** transform @p src into the NTT domain */
-void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity, int degree, int start, int stride) {
+/** transform @p src into the NTT domain
+ *
+ *  The actual polynomial processed by this call is src.coeffs[start::stride]
+ *
+ *  @param dst destination array for NTT coefficients
+ *  @param src input polynomial (original one)
+ *  @param ring
+ *  @param rootOfUnity current root of unity used (might be a power of the ring's root of unity)
+ *  @param degree current degree of polynomial input
+ *  @param start first index in polynomial coefficient array
+ *  @param stride index stride in polynomial coefficient array
+*/
+void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int rootOfUnity, int degree, int stride) {
     if (degree == 0) {
-        dst->coeffs[0] = src.coeffs[start];
-        dst->modulo = src.modulo;
-        dst->degree = degree;
+        dst->coeffs[0] = coeffs[0];
     } else if (degree == 1) {
-        int even  = src.coeffs[start];
-        int odd   = src.coeffs[start+stride];
-        int twiddle = 1;
-        twiddle = ring_mul(ring, twiddle, odd);
-        dst->coeffs[0] = ring_add(ring, even, twiddle);
-        dst->coeffs[1] = ring_sub(ring, even, twiddle);
+        int even  = coeffs[0];
+        int odd   = coeffs[stride];
+        dst->coeffs[0] = even + odd;
+        dst->coeffs[1] = even - odd;
     } else {
         assert(degree % 2 == 1);
         // re-using destination array as temporary storage for sub NTT
-        ntt_t ntt_even = {.coeffs = dst->coeffs, .coeffSize = (dst->coeffSize / 2), .degree = (degree / 2), .modulo = src.modulo};
-        ntt_t ntt_odd = {.coeffs = (dst->coeffs + (dst->coeffSize / 2)), .coeffSize = (dst->coeffSize / 2), .degree = (degree / 2), .modulo = src.modulo};
+        ntt_t ntt_even = {.coeffs = dst->coeffs, .coeffSize = (dst->coeffSize / 2), .degree = (degree / 2), .modulo = dst->modulo};
+        ntt_t ntt_odd = {.coeffs = (dst->coeffs + (dst->coeffSize / 2)), .coeffSize = (dst->coeffSize / 2), .degree = (degree / 2), .modulo = dst->modulo};
         // recursion
         int root_square = ring_square(ring, rootOfUnity);
-        poly_fast_ntt_transform(&ntt_even, src, ring, root_square, degree / 2, start, 2 * stride);
-        poly_fast_ntt_transform(&ntt_odd, src, ring, root_square, degree / 2, start + stride, 2 * stride);
+        poly_fast_ntt_transform_helper(&ntt_even, coeffs, ring, root_square, degree / 2, 2 * stride);
+        poly_fast_ntt_transform_helper(&ntt_odd, coeffs + stride, ring, root_square, degree / 2, 2 * stride);
         // reconstruction
         int i;
         for (i = 0; i <= degree / 2; ++i) {
@@ -73,6 +80,19 @@ void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int root
             dst->coeffs[i + (degree + 1) / 2] = ring_sub(ring, even, twiddle);
         }
     }
+}
+
+/** transform @p src into the NTT domain
+ *
+ *  The actual polynomial processed by this call is src.coeffs[start::stride]
+ *
+ *  @param dst destination array for NTT coefficients
+ *  @param src input polynomial (original one)
+ *  @param ring
+ *  @param rootOfUnity current root of unity used (might be a power of the ring's root of unity)
+*/
+void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity) {
+    poly_fast_ntt_transform_helper(dst, src.coeffs, ring, rootOfUnity, src.degree, 1);
 }
 
 /** transform @p src into the NTT domain */
@@ -120,7 +140,7 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring) {
 
     // inverse NTT transform can be performed by doing NTT with 1/root as initial root of unity
     // and then dividing by the number of coefficients
-    poly_fast_ntt_transform(dst, src, ring, ring.invRootOfUnity, src.degree, 0, 1);
+    poly_fast_ntt_transform(dst, src, ring, ring.invRootOfUnity);
     int d;
     for (d = 0; d <= src.degree; d++) {
         dst->coeffs[d] *= ring.invDegree;
@@ -155,8 +175,8 @@ void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, p
     ntt_t ntt_rhs = allocate_poly(rhs.degree, 3329);
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    poly_fast_ntt_transform(&ntt_lhs, lhs, ring, ring.rootOfUnity, lhs.degree, 0, 1);
-    poly_fast_ntt_transform(&ntt_rhs, rhs, ring, ring.rootOfUnity, rhs.degree, 0, 1);
+    poly_fast_ntt_transform(&ntt_lhs, lhs, ring, ring.rootOfUnity);
+    poly_fast_ntt_transform(&ntt_rhs, rhs, ring, ring.rootOfUnity);
 
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
 
