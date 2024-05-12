@@ -51,7 +51,7 @@ static int ring_power(ring_t ring, int lhs, int n) {
  *  @param start first index in polynomial coefficient array
  *  @param stride index stride in polynomial coefficient array
 */
-void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][128]) {
+void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][64]) {
     if (degree == 0) {
         dst->coeffs[0] = coeffs[0];
     } else if (degree == 1) {
@@ -68,12 +68,10 @@ void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int de
         poly_fast_ntt_transform_helper(&ntt_even, coeffs, ring, degree / 2, 2 * stride, level+1, rootPowers);
         poly_fast_ntt_transform_helper(&ntt_odd, coeffs + stride, ring, degree / 2, 2 * stride, level+1, rootPowers);
         // reconstruction
-        // int rootOfUnity = rootSquares[level]; // using pre-computing power of two of the original root of unity
         int i;
         for (i = 0; i <= degree / 2; ++i) {
             int even  = ntt_even.coeffs[i];
             int odd   = ntt_odd.coeffs[i];
-            // int twiddle = ring_power(ring, rootOfUnity, i);
             int twiddle = rootPowers[level][i];
             twiddle = ring_mul(ring, twiddle, odd);
             dst->coeffs[i] = ring_add(ring, even, twiddle);
@@ -92,13 +90,14 @@ void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int de
  *  @param rootOfUnity current root of unity used (might be a power of the ring's root of unity)
 */
 void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity) {
-    int rootPowers[8][128];
+    int rootPowers[8][64];
+    // building a share table of required powers of the root of unity
     rootPowers[0][0] = 1;
     rootPowers[0][1] = rootOfUnity;
     for (int p = 2; p < (64 >> 0); ++p) {
         rootPowers[0][p] = ring_mul(ring, rootPowers[0][p-1], rootPowers[0][1]);
     }
-    for (int d = 1; d < 8; d++) {
+    for (int d = 1; d < 7; d++) {
         rootPowers[d][0] = 1;
         rootPowers[d][1] = ring_square(ring, rootPowers[d-1][1]);
         for (int p = 2; p < (64 >> d); ++p) {
