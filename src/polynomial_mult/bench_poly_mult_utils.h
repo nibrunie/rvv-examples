@@ -121,6 +121,11 @@ static poly_mult_bench_result_t poly_mult_bench(polynomial_t* dst, polynomial_t*
     stop = read_perf_counter();
     bench_result.perf_count = stop - start;
 
+    // canonicalization to positive coefficients: this is only required because of the way we
+    // compare results
+    int d;
+    for (d = 0; d <= dst->degree; d++) dst->coeffs[d] += dst->coeffs[d] < 0 ? dst->modulo : 0;
+
     bench_result.errors = compare_poly(*dst, *golden);
 
 #       ifdef VERY_VERBOSE
