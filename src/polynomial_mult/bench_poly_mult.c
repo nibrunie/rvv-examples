@@ -8,11 +8,13 @@
 
 
 /** Declaring various softmax implementation benchmarks **/
-poly_mult_bench_result_t poly_mult_baseline_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
+poly_mult_bench_result_t poly_mult_mod_baseline_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
-poly_mult_bench_result_t poly_mult_scalar_opt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
+poly_mult_bench_result_t poly_mult_mod_scalar_opt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
-typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* golden);
+poly_mult_bench_result_t poly_mult_ntt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
+
+typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
 typedef struct {
@@ -22,8 +24,8 @@ typedef struct {
 } poly_mult_bench_t;
 
 
-// for use as golden implementation
-extern void poly_mult_baseline(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs);
+// for use as golden implementations
+extern void poly_mult_mod_baseline(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo);
 
 /** Display the content of a polynomial on stdout */
 void poly_dump(polynomial_t poly)
@@ -37,27 +39,31 @@ void poly_dump(polynomial_t poly)
 }
 
 #ifndef NUM_TESTS
-#define NUM_TESTS 10
+#define NUM_TESTS 1
 #endif
 
 
 int main(void) {
     int i;
     poly_mult_bench_t benchmarks[] = {
-        (poly_mult_bench_t){.bench = poly_mult_baseline_bench,   .label="baseline polynomial multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_scalar_opt_bench, .label="optimized scalar polynomial multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_mod_baseline_bench,   .label="baseline polynomial multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_bench,        .label="slow ntt-based multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_mod_scalar_opt_bench, .label="optimized scalar polynomial multiplication"},
     };
+    int moduloCoeffs[] = {-1, 0, 0, 0, 1};
+    polynomial_t degree4modulo = {.modulo = 3329, .degree = 4, .coeffSize = 5, .coeffs = moduloCoeffs};
 
-    size_t testSizes[] = {4, 16, 511}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
+    size_t testSizes[] = {3};//, 16, 255}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
+    polynomial_t modulos[] = {degree4modulo};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];
 #       ifdef VERBOSE 
         printf("--------------------------------------------------------------------------------\n");
         printf("--------------------------------------------------------------------------------\n");
-        printf("Benchmarking polynomial on %d-degree polynomials.\n", n);
+        printf("Benchmarking polynomial multiplication (with modulo) on %d-degree polynomials.\n", n);
 #       endif
-        int modulo = 8319;
+        int modulo = 3329; // "small"-Kyber value (8380417 for Dilithium)
         polynomial_t lhs = allocate_poly(n, modulo);
         polynomial_t rhs = allocate_poly(n, modulo);
         polynomial_t golden = allocate_poly(2*n, modulo);
@@ -81,7 +87,7 @@ int main(void) {
             randomize_poly(lhs);
 
             // computing golden value
-            poly_mult_baseline(&golden, lhs, rhs);
+            poly_mult_mod_baseline(&golden, lhs, rhs, modulos[testId]);
 
 #           ifdef VERY_VERBOSE
             printf("lhs polynomial :\n");
@@ -97,7 +103,7 @@ int main(void) {
             {
                 memset(dst.coeffs, 0, sizeof(uint32_t) * dst.degree); // resetting array in-between experiments
 
-                poly_mult_bench_result_t local_result = benchmarks[benchId].bench(&dst, &lhs, &rhs, &golden);
+                poly_mult_bench_result_t local_result = benchmarks[benchId].bench(&dst, &lhs, &rhs, &modulos[testId], &golden);
 
                 benchmarks[benchId].result = accumulate_bench_result(benchmarks[benchId].result, local_result);
 
@@ -120,8 +126,9 @@ int main(void) {
             printf("--------------------------------------------------------------------------------\n");
             printf("%s used %d " PERF_METRIC "(s) to evaluate multiplication on a degree %d polynomial.\n",
                 benchmarks[benchId].label, bench_result.perf_count, n);
-            printf(" " PERF_METRIC " per degree:    %.3f\n", (double) bench_result.perf_count / n);
-            printf("  element(s) per " PERF_METRIC ": %.3f\n", (double) n / bench_result.perf_count);
+            printf(" " PERF_METRIC " per multiplication:  %d\n", bench_result.perf_count);
+            printf(" " PERF_METRIC " per degree:          %.3f\n", (double) bench_result.perf_count / n);
+            printf("  element(s) per " PERF_METRIC ":     %.3f\n", (double) n / bench_result.perf_count);
             printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
