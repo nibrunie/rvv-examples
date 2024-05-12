@@ -30,10 +30,16 @@ poly_mult_baseline.o: poly_mult_baseline.c
 poly_mult_rvv.o: poly_mult_rvv.c
 	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv -c -o $@ $^
 
-bench_poly_mult: bench_poly_mult.c poly_mult_baseline.o poly_mult_rvv.o
+ntt_scalar.o: ntt_scalar.c
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv -c -o $@ $^
+
+poly_mult_ntt.o: poly_mult_ntt.c
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv -c -o $@ $^
+
+bench_poly_mult: bench_poly_mult.c poly_mult_baseline.o poly_mult_rvv.o ntt_scalar.o poly_mult_ntt.o
 	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
-basic_poly_test: basic_poly_test.c poly_mult_baseline.o
+basic_poly_test: basic_poly_test.c poly_mult_baseline.o ntt_scalar.o
 	 $(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
 sim_bench_poly_mult: bench_poly_mult
