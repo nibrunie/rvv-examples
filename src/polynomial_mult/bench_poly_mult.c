@@ -14,6 +14,8 @@ poly_mult_bench_result_t poly_mult_mod_scalar_opt_bench(polynomial_t* dst, polyn
 
 poly_mult_bench_result_t poly_mult_ntt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_fast_ntt_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
+
 typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
@@ -47,14 +49,17 @@ int main(void) {
     int i;
     poly_mult_bench_t benchmarks[] = {
         (poly_mult_bench_t){.bench = poly_mult_mod_baseline_bench,   .label="baseline polynomial multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_bench,        .label="slow ntt-based multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_bench,            .label="slow ntt-based multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_fast_ntt_bench,       .label="fast ntt-based multiplication"},
         (poly_mult_bench_t){.bench = poly_mult_mod_scalar_opt_bench, .label="optimized scalar polynomial multiplication"},
     };
-    int moduloCoeffs[] = {-1, 0, 0, 0, 1};
-    polynomial_t degree4modulo = {.modulo = 3329, .degree = 4, .coeffSize = 5, .coeffs = moduloCoeffs};
+    int moduloCoeffs[129] = {0};
+    moduloCoeffs[0] = -1;
+    moduloCoeffs[128] = 1;
+    polynomial_t degree128modulo = {.modulo = 3329, .degree = 128, .coeffSize = 129, .coeffs = moduloCoeffs};
 
-    size_t testSizes[] = {3};//, 16, 255}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
-    polynomial_t modulos[] = {degree4modulo};
+    size_t testSizes[] = {127};//, 16, 255}; // , 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
+    polynomial_t modulos[] = {degree128modulo};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];
