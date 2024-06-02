@@ -209,7 +209,10 @@ void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polyno
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
     poly_ntt_inv_transform(dst, ntt_lhs_times_rhs, ring);
 
-    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be free (or statically allocated)
+    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
+    free(ntt_lhs.coeffs);
+    free(ntt_rhs.coeffs);
+    free(ntt_lhs_times_rhs.coeffs);
 }
 
 void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
@@ -229,5 +232,7 @@ void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, p
 
     poly_fast_inv_ntt_tranform(dst, ntt_lhs_times_rhs, ring);
 
-    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be free (or statically allocated)
+    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
+    free(ntt_lhs.coeffs);
+    free(ntt_lhs_times_rhs.coeffs);
 }
