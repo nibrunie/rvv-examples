@@ -336,3 +336,7 @@ if __name__ == "__main__":
     print([f"{ntt.coeffs}" for ntt in ntts])
     intts = [fast_inv_ntt_transform(ntt) for ntt in ntts + [ntts[0] * ntts[1]]]
     print([f"{intt.coeffs}" for intt in intts])
+
+    print("\n bench emulation")
+    DefaultRing = Ring.fromModulo(3329, 128)
+    print(f"coefficient arithmetic is done in {DefaultRing}")
