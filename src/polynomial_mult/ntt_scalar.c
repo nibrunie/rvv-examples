@@ -79,17 +79,14 @@ void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int de
     }
 }
 
-/** transform @p src into the NTT domain
- *
- *  The actual polynomial processed by this call is src.coeffs[start::stride]
- *
- *  @param dst destination array for NTT coefficients
- *  @param src input polynomial (original one)
- *  @param ring
- *  @param rootOfUnity current root of unity used (might be a power of the ring's root of unity)
-*/
-void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity) {
-    int rootPowers[8][64];
+/** Flag to indicate that ring structures (included tabulated root powers) have been initialized */
+int ringInit = 0;
+
+/** Shared tabulated arrays of root powers */
+int ringPowers[1][8][64];
+int ringInvPowers[1][8][64];
+
+void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity) {
     // building a share table of required powers of the root of unity
     rootPowers[0][0] = 1;
     rootPowers[0][1] = rootOfUnity;
@@ -103,6 +100,35 @@ void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int root
             rootPowers[d][p] = ring_mul(ring, rootPowers[d][p-1], rootPowers[d][1]);
         }
     }
+}
+
+ring_t getRing(int degree) {
+    assert(degree == 127); // only value currently supported
+    ring_t ring = {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+    // first time initialization of shared tables
+    if (!ringInit) {
+        initRootPowerTable(ring, ringPowers[0], ring.rootOfUnity);
+        initRootPowerTable(ring, ringInvPowers[0], ring.invRootOfUnity);
+
+        ringInit = 1;
+    }; 
+
+    return ring;
+} 
+
+
+/** transform @p src into the NTT domain
+ *
+ *  The actual polynomial processed by this call is src.coeffs[start::stride]
+ *
+ *  @param dst destination array for NTT coefficients
+ *  @param src input polynomial (original one)
+ *  @param ring
+ *  @param rootOfUnity current root of unity used (might be a power of the ring's root of unity)
+*/
+void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity) {
+    int rootPowers[8][64];
+    initRootPowerTable(ring, rootPowers, rootOfUnity);
     poly_fast_ntt_transform_helper(dst, src.coeffs, ring, src.degree, 1, 0, rootPowers);
 }
 
@@ -159,40 +185,6 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring) {
     }
 }
 
-int ringPowers[1][8][64];
-int ringInvPowers[1][8][64];
-int ringInit = 0;
-
-void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity) {
-    // building a share table of required powers of the root of unity
-    rootPowers[0][0] = 1;
-    rootPowers[0][1] = rootOfUnity;
-    for (int p = 2; p < (64 >> 0); ++p) {
-        rootPowers[0][p] = ring_mul(ring, rootPowers[0][p-1], rootPowers[0][1]);
-    }
-    for (int d = 1; d < 7; d++) {
-        rootPowers[d][0] = 1;
-        rootPowers[d][1] = ring_square(ring, rootPowers[d-1][1]);
-        for (int p = 2; p < (64 >> d); ++p) {
-            rootPowers[d][p] = ring_mul(ring, rootPowers[d][p-1], rootPowers[d][1]);
-        }
-    }
-}
-
-ring_t getRing(int degree) {
-    assert(degree == 127); // only value currently supported
-    ring_t ring = {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
-    // first time initialization of shared tables
-    if (!ringInit) {
-        initRootPowerTable(ring, ringPowers[0], ring.rootOfUnity);
-        initRootPowerTable(ring, ringInvPowers[0], ring.invRootOfUnity);
-
-        ringInit = 1;
-    }; 
-
-    return ring;
-} 
-
 
 void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
@@ -225,12 +217,18 @@ void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, p
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    poly_fast_ntt_transform(&ntt_lhs, lhs, ring, ring.rootOfUnity);
-    poly_fast_ntt_transform(&ntt_lhs_times_rhs, rhs, ring, ring.rootOfUnity);
+    poly_fast_ntt_transform_helper(&ntt_lhs, lhs.coeffs, ring, lhs.degree, 1, 0, ringPowers[0]);
+    poly_fast_ntt_transform_helper(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, 1, 0, ringPowers[0]);
 
     ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    poly_fast_inv_ntt_tranform(dst, ntt_lhs_times_rhs, ring);
+    poly_fast_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, 1, 0, ringInvPowers[0]);
+    // division by the degree
+    int d;
+    for (d = 0; d <= dst->degree; d++) {
+        dst->coeffs[d] *= ring.invDegree;
+        dst->coeffs[d] %= ring.modulo;
+    }
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
     free(ntt_lhs.coeffs);
