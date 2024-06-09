@@ -7,6 +7,12 @@
 #include <bench_poly_mult_utils.h>
 
 
+/** Number of executed test(s) */
+#ifndef NUM_TESTS
+#define NUM_TESTS 10
+#endif
+
+
 /** Declaring various softmax implementation benchmarks **/
 poly_mult_bench_result_t poly_mult_mod_baseline_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
@@ -41,11 +47,6 @@ void poly_dump(polynomial_t poly)
     }
     printf("\n");
 }
-
-#ifndef NUM_TESTS
-#define NUM_TESTS 1
-#endif
-
 
 int main(void) {
     int i;
