@@ -13,6 +13,60 @@ void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int root
 void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring); 
 void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs); 
 
+/** reinterpret cast help: reinterpreting to a different element size AND signedness */
+static inline vint32m8_t __riscv_vreinterpret_v_u64m8_i32m8(vuint64m8_t vec) {
+    vuint32m8_t vec_u32m8 = __riscv_vreinterpret_v_u64m8_u32m8(vec);
+    return __riscv_vreinterpret_v_u32m8_i32m8(vec_u32m8);
+}
+
+/** Emulation of vwsll (when intrinsics is not defined) */
+static inline vuint64m8_t __riscv_vwsll_vx_u64m8(vuint32m4_t vec, int amt, size_t vl) {
+   return __riscv_vsll_vx_u64m8(__riscv_vzext_vf2_u64m8(vec, vl), amt, vl); 
+}
+
+void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
+    size_t avl = (dst->degree + 1) / 2;
+    int* dst_coeffs = dst->coeffs;
+
+    for (size_t vl; avl > 0; avl -= vl, coeffs += vl, dst_coeffs += 2*vl)
+    {
+        // compute loop body vector length from avl (application vector length)
+        vl = __riscv_vsetvl_e32m4(avl);
+
+        // loading even coefficients
+        vuint32m4_t vec_even_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs, vl);
+        // duplicating expansion
+        vint32m8_t vec_lhs = __riscv_vreinterpret_v_u64m8_i32m8(
+            __riscv_vor_vv_u64m8(
+                __riscv_vzext_vf2_u64m8(vec_even_coeffs, vl),
+                __riscv_vwsll_vx_u64m8(vec_even_coeffs, 32, vl),
+                vl
+            )
+        );
+        // loading odd coefficients
+        vuint32m4_t vec_odd_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs + stride, vl);
+        // duplicating expansion
+        vint32m8_t vec_rhs = __riscv_vreinterpret_v_u64m8_i32m8(
+            __riscv_vor_vv_u64m8(
+                __riscv_vzext_vf2_u64m8(vec_odd_coeffs, vl),
+                __riscv_vwsll_vx_u64m8(
+                    __riscv_vreinterpret_v_i32m4_u32m4(
+                        __riscv_vneg_v_i32m4(__riscv_vreinterpret_v_u32m4_i32m4(vec_odd_coeffs), vl)
+                    ), 32, vl),
+                vl
+            )
+        );
+        vint32m8_t vec_rec = __riscv_vadd_vv_i32m8(
+            vec_lhs,
+            vec_rhs,
+            vl*2); // FIXME: need cast to 32-bit
+
+        // storing results
+        __riscv_vse32_v_i32m8(dst_coeffs, vec_rec, 2*vl);
+    }
+}
+
+
 void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
 
@@ -22,19 +76,18 @@ void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     int* dst_coeffs = dst->coeffs;
     for (size_t vl; avl > 0; avl -= vl, lhs_coeffs += vl, rhs_coeffs += vl, dst_coeffs += vl)
     {
-        // compute loop body vector length from avl
-        // (application vector length)
-        vl = __riscv_vsetvl_e32m1(avl);
+        // compute loop body vector length from avl (application vector length)
+        vl = __riscv_vsetvl_e32m8(avl);
         // loading operands
-        vint32m1_t vec_src_lhs = __riscv_vle32_v_i32m1(lhs_coeffs, vl);
-        vint32m1_t vec_src_rhs = __riscv_vle32_v_i32m1(rhs_coeffs, vl);
-        // actual vector addition
-        vint32m1_t vec_acc = __riscv_vmul_vv_i32m1(vec_src_lhs,
-                                                   vec_src_rhs,
-                                                   vl);
-        vec_acc = __riscv_vrem_vx_i32m1(vec_acc, dst->modulo, vl);
+        vint32m8_t vec_src_lhs = __riscv_vle32_v_i32m8(lhs_coeffs, vl);
+        vint32m8_t vec_src_rhs = __riscv_vle32_v_i32m8(rhs_coeffs, vl);
+        // modulo multiplication (eventually we will want to consider other techniques
+        // than a naive remainder; e.g. Barret's reduction algorithm using a pre-computed
+        // factor from the static modulo).
+        vint32m8_t vec_acc = __riscv_vmul_vv_i32m8(vec_src_lhs, vec_src_rhs, vl);
+        vec_acc = __riscv_vrem_vx_i32m8(vec_acc, dst->modulo, vl);
         // storing results
-        __riscv_vse32_v_i32m1(dst_coeffs, vec_acc, vl);
+        __riscv_vse32_v_i32m8(dst_coeffs, vec_acc, vl);
     }
 }
 
