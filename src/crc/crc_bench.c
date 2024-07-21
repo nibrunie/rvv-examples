@@ -55,7 +55,9 @@ int bench_crc_be(void)
     crc32init_be(ethCRC32Poly);
     stop = read_cycles();
 
+#ifdef VERBOSE
     printf("CRC32 BE table init in %u cycle(s)\n", stop - start);
+#endif // ifdef VERBOSE
 
     // generating constant for vector multiplication
     uint8_t dbgMsg[128] = {0};
@@ -69,7 +71,10 @@ int bench_crc_be(void)
     vectorRedConstants[0] = crc32_be_generic(0, dbgMsg, 1 + 20, ethCRC32Poly); // X^160 mod polynomial
     vectorRedConstants[1] = crc32_be_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^160 mod polynomial
     stop = read_cycles();
+
+#ifdef VERBOSE
     printf("crc_be_vector_opt reduction constant table init in %u cycle(s)\n", stop - start);
+#endif // ifdef VERBOSE
 
 
     size_t msgSize = MSG_SIZES;
@@ -83,7 +88,6 @@ int bench_crc_be(void)
 
     uint32_t delayGeneric = stop - start;
     float throughputGeneric = (double) delayGeneric / msgSize; 
-
 
     start = read_cycles();
     uint32_t resVector = crcEth32_be_vector(0, inputMsg, msgSize);
@@ -125,10 +129,13 @@ int bench_crc_le(void)
     crc32init_le(ethCRC32PolyInv);
     stop = read_cycles();
 
+#ifdef VERY_VERBOSE
     printf("CRC32 LE table init in %u cycle(s)\n", stop - start);
+#endif
 
     // generating constant for vector multiplication
     uint8_t dbgMsg[128] = {0};
+#ifdef VERY_VERBOSE
     dbgMsg[0] = 1;
     for (int i = 32; i <= 512; i +=32) {
         printf("CRC32(X^%d)  = %"PRIx32" (crc32_be_generic)\n", i, crc32_be_generic(0, dbgMsg, 1 + i / 8, ethCRC32Poly));
@@ -137,6 +144,7 @@ int bench_crc_le(void)
     for (int i = 32; i <= 128; i +=32) {
         printf("CRC32(X^%d)  = %"PRIx32" (crc32_le_generic)\n", i, crc32_le_generic(0, dbgMsg, 1 + i / 8, ethCRC32PolyInv));
     }
+#endif
 
     start = read_cycles();
     uint32_t vectorRedConstants[2];
@@ -174,7 +182,7 @@ int bench_crc_le(void)
     printf("BENCH %lu %"PRIx32" _vector %u\n", msgSize, resVector,  delayVector);
 #endif // ifdef VERBOSE
 
-    return 0;//!(resVector == resGeneric && resVectorOpt == resGeneric);
+    return !(resVector == resGeneric); //  && resVectorOpt == resGeneric);
 }
 
 int main(void) {
