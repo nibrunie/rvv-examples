@@ -84,7 +84,6 @@ uint32_t crcEth32_le_vector(uint32_t crc, unsigned char const *p, size_t len)
       vuint64m1_t multRes = __riscv_vclmul_vv_u64m1(extInputData, extRedCstVector, vl);
       crcAcc = __riscv_vredxor_vs_u64m1_u64m1(multRes, zeroVecU64M1, vl);
       // printf("crcAccU64=%"PRIx64"\n", __riscv_vmv_x_s_u64m1_u64(crcAcc));
-      // printf("crcAccU64=%"PRIx64"\n", __riscv_vmv_x_s_u64m1_u64(crcAcc));
   }
   uint64_t crcAccBuffer[1] = {0};
   uint32_t preCrc = __riscv_vmv_x_s_u64m1_u64(crcAcc);
