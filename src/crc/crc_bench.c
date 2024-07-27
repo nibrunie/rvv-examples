@@ -31,6 +31,8 @@ uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len, uin
 
 uint32_t crc_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
 
+uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len, const uint32_t redCsts[]);
+
 /** basic counter read function */
 unsigned long read_cycles(void)
 {
@@ -71,7 +73,9 @@ int bench_crc_be(void)
     start = read_cycles();
     uint32_t vectorRedConstants[2];
     vectorRedConstants[0] = crc32_be_generic(0, dbgMsg, 1 + 20, ethCRC32Poly); // X^160 mod polynomial
-    vectorRedConstants[1] = crc32_be_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^160 mod polynomial
+    vectorRedConstants[1] = crc32_be_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^96 mod polynomial
+    uint32_t vectorRedConstantsZvbc32e[4];
+    for (int i = 0; i < 4; ++i) vectorRedConstantsZvbc32e[i] = crc32_be_generic(0, dbgMsg, 1 + 20 - 4 * i, ethCRC32Poly);
     stop = read_cycles();
 
 #ifdef VERBOSE
@@ -105,15 +109,25 @@ int bench_crc_be(void)
     uint32_t delayVectorOpt = stop - start;
     float throughputVectorOpt = (double) delayVectorOpt / msgSize; 
 
+    // FIXME: Zvbc32e needs a specific 4x32-bit vectorRedConstants
+    start = read_cycles();
+    uint32_t resVectorZvbc32e = crc_be_vector_zvbc32e(0, inputMsg, msgSize, vectorRedConstantsZvbc32e);
+    stop = read_cycles();
+
+    uint32_t delayVectorZvbc32e = stop - start;
+    float throughputVectorZvbc32e = (double) delayVectorZvbc32e / msgSize; 
+
     // full message
 #ifdef VERBOSE
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc32_be_generic)   in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resGeneric, delayGeneric, throughputGeneric);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crcEth32_be_vector) in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVector,  delayVector, throughputVector);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_be_vector_opt)  in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorOpt,  delayVectorOpt, throughputVectorOpt);
+    printf("CRC32(msg[%lu]) = %"PRIx32" (crc32_be_generic)      in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resGeneric, delayGeneric, throughputGeneric);
+    printf("CRC32(msg[%lu]) = %"PRIx32" (crcEth32_be_vector)    in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVector,  delayVector, throughputVector);
+    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_be_vector_opt)     in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorOpt,  delayVectorOpt, throughputVectorOpt);
+    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_be_vector_zvbc32e) in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorZvbc32e,  delayVectorZvbc32e, throughputVectorZvbc32e);
 #else
-    printf("BENCH %lu %"PRIx32" generic %u\n", msgSize, resGeneric, delayGeneric);
-    printf("BENCH %lu %"PRIx32" _vector %u\n", msgSize, resVector,  delayVector);
-    printf("BENCH %lu %"PRIx32" _vecopt %u\n", msgSize, resVectorOpt,  delayVectorOpt);
+    printf("BENCH %lu %"PRIx32" generic  %u\n", msgSize, resGeneric, delayGeneric);
+    printf("BENCH %lu %"PRIx32" _vector  %u\n", msgSize, resVector,  delayVector);
+    printf("BENCH %lu %"PRIx32" _vecopt  %u\n", msgSize, resVectorOpt,  delayVectorOpt);
+    printf("BENCH %lu %"PRIx32" _zvbc32e %u\n", msgSize, resVectorZvbc32e,  delayVectorZvbc32e);
 #endif // ifdef VERBOSE
 
     return !(resVector == resGeneric && resVectorOpt == resGeneric);
