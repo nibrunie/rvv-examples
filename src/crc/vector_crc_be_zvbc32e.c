@@ -59,12 +59,13 @@ uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len,
     "vredxor.vs	%[crcAcc], v13, v8\n"
     "vslideup.vi	%[crcAcc], v11, 1\n"
     "add	%[p], %[p], 16\n"
-    "add	%[len], %[len], -16\n" // s0 -> len
-    "bgeu	%[len], a2, 1b\n"
+    "bltu	%[p], a2, 1b\n"
   : [p]"+r"(p), [len]"+r"(len), [avl]"+r"(avl), [crcAcc]"+vr"(crcAcc), [redConstantVector]"+vr"(redConstantVector)
-  : [bound]"r"(2*vl*4)
+  // : [bound]"r"(2*vl*4)
+  : [bound]"r"(p + len - 16) // FIXME bound assume len is a multiple of 16
   : "v10", "v13", "v20", "v12", "v8", "v11", "a2"
   );
+  len = 16; // remainder after end of loop (FIXME: assume original len was a multiple of 16)
 
 #else
   for (; avl >= 2*vl; avl -= vl, p += 4 * vl, len -= 4*vl) {
