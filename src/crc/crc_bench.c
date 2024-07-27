@@ -66,16 +66,18 @@ int bench_crc_be(void)
     // generating constant for vector multiplication
     uint8_t dbgMsg[128] = {0};
     dbgMsg[0] = 1;
-    // for (int i = 32; i <= 512; i +=32) {
-    //    printf("CRC32(X^%d)  = %"PRIx32" (crc32_be_generic)\n", i, crc32_be_generic(0, dbgMsg, 1 + i / 8, ethCRC32Poly));
-    //}
+#ifdef VERY_VERBOSE
+    for (int i = 32; i <= 512; i +=32) {
+        printf("CRC32(X^%d)  = %"PRIx32" (crc32_be_generic)\n", i, crc32_be_generic(0, dbgMsg, 1 + i / 8, ethCRC32Poly));
+    }
+#endif
 
     start = read_cycles();
     uint32_t vectorRedConstants[2];
     vectorRedConstants[0] = crc32_be_generic(0, dbgMsg, 1 + 20, ethCRC32Poly); // X^160 mod polynomial
     vectorRedConstants[1] = crc32_be_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^96 mod polynomial
     uint32_t vectorRedConstantsZvbc32e[4];
-    for (int i = 0; i < 4; ++i) vectorRedConstantsZvbc32e[i] = crc32_be_generic(0, dbgMsg, 1 + 20 - 4 * i, ethCRC32Poly);
+    for (int i = 0; i < 4; ++i) vectorRedConstantsZvbc32e[i] = crc32_be_generic(0, dbgMsg, 1 + 16 - 4 * i, ethCRC32Poly);
     stop = read_cycles();
 
 #ifdef VERBOSE
@@ -85,7 +87,8 @@ int bench_crc_be(void)
 
     size_t msgSize = MSG_SIZES;
     unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
-    memset(inputMsg, 1, msgSize);
+    memset(inputMsg, 1, 8 /* msgSize */);
+    memset(inputMsg + 16, 1, 16 /* msgSize */);
 
     start = read_cycles();
     // uint32_t resGeneric = crc32_le_generic(0, inputMsg, 1024, ethCRC32Poly);
