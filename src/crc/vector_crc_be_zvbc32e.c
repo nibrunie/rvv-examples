@@ -48,7 +48,7 @@ uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len,
    size_t vl = __riscv_vsetvl_e32m1(-1);
 
   for (; avl >= 2*vl; avl -= vl, p += 4 * vl, len -= 4*vl) {
-      printf("loop avl=%lu.\n", avl);
+      // printf("loop avl=%lu.\n", avl);
       // compute loop body vector length from application vector length avl
       assert(vl == 4);
       vuint32m1_t inputData = __riscv_vle32_v_u32m1((uint32_t*) p, vl);
@@ -59,8 +59,15 @@ uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len,
       // Actual multiplication
       vuint32m1_t multResLo; // = __riscv_vclmul_vv_u32m1(inputData, extRedCstVector, vl);
       vuint32m1_t multResHi; // = __riscv_vclmulh_vv_u32m1(inputData, extRedCstVector, vl);
-      asm volatile ("vclmul.vv %0, %1, %2" : "=vr"(multResLo) : "vr"(inputData), "vr"(redConstantVector));
-      asm volatile ("vclmulh.vv %0, %1, %2" : "=vr"(multResHi) : "vr"(inputData), "vr"(redConstantVector));
+      asm volatile (
+        "vsetivli x0, 4, e32, m1, tu, mu\n"
+        "vclmul.vv v20, %[inputData], %[redConstantVector]\n"
+        "vclmulh.vv %[multResultHi], %[inputData], %[redConstantVector]\n"
+        "vmv.v.v %[multResultLo], v20\n"
+         : [multResultLo]"=vr"(multResLo), [multResultHi]"=vr"(multResHi) 
+         : [inputData]"vr"(inputData), [redConstantVector]"vr"(redConstantVector)
+         : "v20");
+      // asm volatile ("vclmulh.vv %0, %1, %2" : "=vr"(multResHi) : "vr"(inputData), "vr"(redConstantVector));
 
       crcAccLo = __riscv_vredxor_vs_u32m1_u32m1(multResLo, zeroVecU32M1, vl);
       crcAccHi = __riscv_vredxor_vs_u32m1_u32m1(multResHi, zeroVecU32M1, vl);
