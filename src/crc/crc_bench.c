@@ -29,6 +29,8 @@ uint32_t crcEth32_le_vector(uint32_t crc, unsigned char const *p, size_t len);
  */
 uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len, uint32_t redCsts[]);
 
+uint32_t crc_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
+
 /** basic counter read function */
 unsigned long read_cycles(void)
 {
@@ -173,13 +175,23 @@ int bench_crc_le(void)
     uint32_t delayVector = stop - start;
     float throughputVector = (double) delayVector / msgSize; 
 
+    start = read_cycles();
+    uint32_t resVectorOpt = crcEth32_le_vector_opt(0, inputMsg, msgSize);
+    stop = read_cycles();
+
+    uint32_t delayVectorOpt = stop - start;
+    float throughputVectorOpt = (double) delayVectorOpt / msgSize; 
+
+
     // full message
 #ifdef VERBOSE
     printf("CRC32(msg[%lu]) = %"PRIx32" (crc32_le_generic)   in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resGeneric, delayGeneric, throughputGeneric);
     printf("CRC32(msg[%lu]) = %"PRIx32" (crcEth32_le_vector) in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVector,  delayVector, throughputVector);
+    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_le_vector_opt)  in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorOpt,  delayVectorOpt, throughputVectorOpt);
 #else
     printf("BENCH %lu %"PRIx32" generic %u\n", msgSize, resGeneric, delayGeneric);
     printf("BENCH %lu %"PRIx32" _vector %u\n", msgSize, resVector,  delayVector);
+    printf("BENCH %lu %"PRIx32" _vecopt %u\n", msgSize, resVectorOpt,  delayVectorOpt);
 #endif // ifdef VERBOSE
 
     return !(resVector == resGeneric); //  && resVectorOpt == resGeneric);
