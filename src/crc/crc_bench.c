@@ -88,7 +88,6 @@ int bench_crc_be(void)
     size_t msgSize = MSG_SIZES;
     unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
     memset(inputMsg, 1, msgSize);
-    // memset(inputMsg + 16, 1, 16 /* msgSize */);
 
     start = read_cycles();
     // uint32_t resGeneric = crc32_le_generic(0, inputMsg, 1024, ethCRC32Poly);
