@@ -1,58 +1,43 @@
-# rvvian
+# Implementing CRC with RISC-V Vector
 
-RISC-V Vector In a Nutshell (examples for the course)
+https://github.com/nibrunie/rvv-examples/tree/master/src/crc
 
-https://github.com/RVVIAN/rvvian
+This repository contains a few toy examples of CRC (Cyclic Redundancy Check) implementations, including implementations relying on RISC-V Vector official Zvbc extension and an implementation relying on an experimental new extension: Zvbc32e.
+
+Those examples are described in a blog post on https://fprox.substack.com.
+
 
 
 # Using Docker as development environment
 
-## Requirements
-
-
 ## Building the image
 
+The examples in this directory require an experimental RISC-V.
+This toolchain can be build inside a Docker container using one of the docker file
+present in this repository: https://github.com/nibrunie/rvv-examples/tree/master/riscv-toolchain-hub.Dockerfile
+
 ```
-cd DockerImage
-docker build -t riscv:rvvian . 
+# from the top directory of rvv-examples repository
+docker build -t riscv:rvv-examples-crc -f riscv-toolchain-hub.Dockerfile . 
 ```
 
 
 ## Running the image in a container
 
 ```
-# from the top directory of rvvian repository
-docker run  -ti --mount type=bind,source="$(pwd)"/Examples,target=/home/app riscv:rvvian
+# from the top directory of rvv-examples repository
+docker run  -ti --mount type=bind,source="$(pwd)"/,target=/home/app riscv:rvv-examples-crc
 ```
 
-## Examples
+# Building and executing CRC benchmarks
 
-### Example 0: vector addtion
-
-#### Building
+From within the docker container previous built, you can run the CRC benchmarks easily:
 
 ```
-export PATH=/home/riscv_srcs/llvm-project/build/bin/:$PATH
-clang -c --target=riscv64  -menable-experimental-extensions   -march=rv64gcv_zvbc1p0_zvbb1p0 src/vector_crc_intrinsics.c -O2
-riscv64-unknown-elf-gcc -march=rv64gcv src/crc32.c src/crc_bench.c vector_crc_intrinsics.o -o bench_crc -O2
+cd src/crc
+make clean; make SPIKE=/home/riscv_srcs/spike-vka/build/spike PK=/home/riscv_srcs/riscv-gnu-toolchain/build-pk64/pk sim CFLAGS=" -O3 -DCOUNT_INSTRET -DVERBOSE"
 ```
-
-#### Executing with spike
-
-Spike (https://github.com/riscv-software-src/riscv-isa-sim) is one of the main instruction set simulator for RISC-V.
-It can be used with riscv proxy kernel, `pk`, (https://github.com/riscv-software-src/riscv-pk) to execute basic programs.
-
-```
-spike --isa=rv64gcv_zvbc_zicntr_zihpm /opt/riscv/riscv64-unknown-elf/bin/pk bench_crc
-```
-
-To generate assembly traces: add `-l` option.
-
-#### Executing with QEMU
-
-```
-qemu-riscv64 -cpu rv64,v=on,vext_spec=v1.0,vlen=128,rvv_ta_all_1s=on ./bench_crc
-```
-
 
 # Author(s)
+
+Nicolas Brunie
