@@ -23,7 +23,11 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
 {
 	int i;
   size_t avl = len / 4; // 4-byte per element
+  const uint32_t ethCRC32Poly = 0x04C11DB7;
 
+  // fast exit if length is not large enough to justify entering the vectorized loop
+  // FIXME: The threshold could be tuned
+  if (len <= 16) return crc32_be_generic(0, p, len, ethCRC32Poly);
 
   // we take 4 32-bit elements (E, F, G, H) from the message and reduce
   // them 
@@ -60,6 +64,7 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
 #if 1
   asm volatile (
     "mv a2, %[bound]\n"
+    "bgeu	%[p], a2, 2f\n" // skipping inner loop if length is not large enough
     "vmv.v.i v11, 0\n"
     "vsetivli	zero,4,e32,m1,tu,ma\n"
     "1:\n"
@@ -73,6 +78,7 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
     "vslideup.vi	%[crcAcc], v11, 1\n"
     "add	%[p], %[p], 16\n"
     "bltu	%[p], a2, 1b\n"
+    "2:\n"
   : [p]"+r"(p), [len]"+r"(len), [avl]"+r"(avl), [crcAcc]"+vr"(crcAcc), [redConstantVector]"+vr"(redConstantVector)
   // : [bound]"r"(2*vl*4)
   : [bound]"r"(p + len - 16) // FIXME bound assume len is a multiple of 16
@@ -112,12 +118,12 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
   // 1. store the 64-bit of the folded value in memory and call the baseline scalar CRC on it
   // 2. finalize the CRC on the unprocessed bytes from p (should be 128-bit left)
   uint32_t crcAccBuffer[4] = {0, 0, 0, 0};
+  if (len >= 16)
   // byte order reversing to ensure MS-byte is stored first (lowest address)
   crcAcc = __riscv_vrev8_v_u32m1(crcAcc, 2); 
   __riscv_vse32_v_u32m1(crcAccBuffer, crcAcc, 2);
   uint8_t* crcAccBufferU8 = (uint8_t*) crcAccBuffer;
 
-  const uint32_t ethCRC32Poly = 0x04C11DB7;
   const uint32_t finalSeed = crc32_be_generic(0, crcAccBufferU8, 16, ethCRC32Poly);
   return  finalSeed ^ crc32_be_generic(0, p, len, ethCRC32Poly);
 }
