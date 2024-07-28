@@ -84,42 +84,50 @@ int bench_crc(void) {
         // CRC LE variants
         {.crc_func = crcEth32_le_generic,        .be = false, .label = "crcEth32_le_generic       "},
         {.crc_func = crcEth32_le_vector,         .be = false, .label = "crcEth32_le_vector        "},
-        {.crc_func = crcEth32_le_vector_opt,     .be = false, .label = "crcEth32_le_vector_opt    "},
+        // FIXME: not developped yet
+        // {.crc_func = crcEth32_le_vector_opt,     .be = false, .label = "crcEth32_le_vector_opt    "},
     };
-    
 
-    size_t msgSize = MSG_SIZES;
-    unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
-    memset(inputMsg, 1, msgSize);
-
-    // computing golden
-    uint32_t golden_be = crcEth32_be_generic(0, inputMsg, msgSize);
-    uint32_t golden_le = crcEth32_le_generic(0, inputMsg, msgSize);
-
+    size_t msgSizes[] = {16, 32, 64, 128, 512, 1024, 16384, MSG_SIZES};
     int error = 0;
+#   ifndef VERBOSE
+        printf("message_size, crc_result, label, perf(" PERF_METRIC ")\n");
+#   endif
 
-    for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(crc_bench_t); bench_id++) {
-        start = read_perf_counter();
-        uint32_t result = benchmarks[bench_id].crc_func(0, inputMsg, msgSize);
-        stop = read_perf_counter();
+    for (int size_id = 0; size_id < sizeof(msgSizes) / sizeof(size_t); ++size_id) {
+        size_t msgSize = msgSizes[size_id];
+        unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
+        memset(inputMsg, 1, msgSize);
 
-        // checks
-        error += result != (benchmarks[bench_id].be ? golden_be : golden_le);
+        // computing golden
+        uint32_t golden_be = crcEth32_be_generic(0, inputMsg, msgSize);
+        uint32_t golden_le = crcEth32_le_generic(0, inputMsg, msgSize);
 
-        uint32_t delay = stop - start;
-        float throughput = (double) delay / msgSize; 
 
-        // full message
-#       ifdef VERBOSE
-        printf("CRC32(msg[%lu]) = %"PRIx32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
-               msgSize, result, benchmarks[bench_id].label, delay, throughput);
-#       else
-        printf("BENCH %lu, %"PRIx32", %s, %u\n", msgSize, result, benchmarks[bench_id].label, delay);
-#       endif
+        for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(crc_bench_t); bench_id++) {
+            start = read_perf_counter();
+            uint32_t result = benchmarks[bench_id].crc_func(0, inputMsg, msgSize);
+            stop = read_perf_counter();
+
+            // checks
+            error += result != (benchmarks[bench_id].be ? golden_be : golden_le);
+
+            uint32_t delay = stop - start;
+            float throughput = (double) delay / msgSize; 
+
+            // full message
+    #       ifdef VERBOSE
+            printf("CRC32(msg[%lu]) = %"PRIx32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
+                msgSize, result, benchmarks[bench_id].label, delay, throughput);
+    #       else
+            printf("%lu, %"PRIx32", %s, %u\n", msgSize, result, benchmarks[bench_id].label, delay);
+    #       endif
+
+        }
+
+        free(inputMsg);
 
     }
-
-    free(inputMsg);
 
     return error;
 }
