@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
+// setting a default message size (1MiB) if none is defined
 #ifndef MSG_SIZES
 # define MSG_SIZES (1024 * 1024)
 #endif 
@@ -16,8 +18,20 @@ uint32_t crc32_be_generic(uint32_t crc, unsigned char const *p,
 					  size_t len,
 					  uint32_t polynomial);
 
+/** Initialization function (table init) for generic implementations */
 void crc32init_le(const uint32_t polynomial);
 void crc32init_be(const uint32_t polynomial);
+
+const uint32_t ethCRC32Poly = 0x04C11DB7;
+const uint32_t ethCRC32PolyInv = 0xedb88320;
+
+// wrapper to build ETH32 specific versions of LE and BE generic CRC routines
+uint32_t crcEth32_be_generic(uint32_t crc, unsigned char const *p, size_t len) {
+    return crc32_be_generic(crc, p, len, ethCRC32Poly);
+}
+uint32_t crcEth32_le_generic(uint32_t crc, unsigned char const *p, size_t len) {
+    return crc32_le_generic(crc, p, len, ethCRC32PolyInv);
+}
 
 /** RVV based implementation of Ethernet CRC32 */
 uint32_t crcEth32_be_vector(uint32_t crc, unsigned char const *p, size_t len);
@@ -27,16 +41,12 @@ uint32_t crcEth32_le_vector(uint32_t crc, unsigned char const *p, size_t len);
  *  It supports an arbitrary polynomial through the use of a table of reduction
  *  constants transmitted through a parameter.
  */
-uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
+uint32_t crcEth32_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
 
-uint32_t crc_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
+uint32_t crcEth32_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len);
 
-uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len);
+uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len);
 
-typedef struct {
-    uint32_t (*crc_func)(uint32_t seed, unsigned char const* p, size_t len);
-    char* label;
-} crc_bench_t;
 
 /** basic counter read function */
 unsigned long read_cycles(void)
@@ -53,76 +63,83 @@ unsigned long read_instret(void)
   return instret;
 }
 
-int bench_crc_be(void)
-{
-    // Normal order, TODO: check if reverse is required
-    uint32_t ethCRC32Poly = 0x04C11DB7;
+typedef struct {
+    uint32_t (*crc_func)(uint32_t seed, unsigned char const* p, size_t len);
+    bool be;
+    char* label;
+} crc_bench_t;
+
+int bench_crc(void) {
     uint32_t start = 0, stop = 0;
 
     // initializing tables for CRC32 polynomial (baseline implementation)
     start = read_cycles();
+    crc32init_le(ethCRC32PolyInv);
+    stop = read_cycles();
+#ifdef VERY_VERBOSE
+    printf("CRC32 LE table init in %u cycle(s)\n", stop - start);
+#endif
+    start = read_cycles();
     crc32init_be(ethCRC32Poly);
     stop = read_cycles();
-
-#ifdef VERBOSE
+#ifdef VERY_VERBOSE
     printf("CRC32 BE table init in %u cycle(s)\n", stop - start);
-#endif // ifdef VERBOSE
+#endif
 
+    crc_bench_t benchmarks[] = {
+        // labels should be padded to all have the same width (result display alignment)
+        // CRC BE variants
+        {.crc_func = crcEth32_be_generic,        .be = true, .label = "crcEth32_be_generic       "},
+        {.crc_func = crcEth32_be_vector,         .be = true, .label = "crcEth32_be_vector        "},
+        {.crc_func = crcEth32_be_vector_opt,     .be = true, .label = "crcEth32_be_vector_opt    "},
+        {.crc_func = crcEth32_be_vector_zvbc32e, .be = true, .label = "crcEth32_be_vector_zvbc32e"},
+
+        // CRC LE variants
+        {.crc_func = crcEth32_le_generic,        .be = false, .label = "crcEth32_le_generic       "},
+        {.crc_func = crcEth32_le_vector,         .be = false, .label = "crcEth32_le_vector        "},
+        {.crc_func = crcEth32_le_vector_opt,     .be = false, .label = "crcEth32_le_vector_opt    "},
+    };
+    
 
     size_t msgSize = MSG_SIZES;
     unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
     memset(inputMsg, 1, msgSize);
 
-    start = read_cycles();
-    // uint32_t resGeneric = crc32_le_generic(0, inputMsg, 1024, ethCRC32Poly);
-    uint32_t resGeneric = crc32_be_generic(0, inputMsg, msgSize, ethCRC32Poly);
-    stop = read_cycles();
+    // computing golden
+    uint32_t golden_be = crcEth32_be_generic(0, inputMsg, msgSize);
+    uint32_t golden_le = crcEth32_le_generic(0, inputMsg, msgSize);
 
-    uint32_t delayGeneric = stop - start;
-    float throughputGeneric = (double) delayGeneric / msgSize; 
+    int error = 0;
 
-    start = read_cycles();
-    uint32_t resVector = crcEth32_be_vector(0, inputMsg, msgSize);
-    stop = read_cycles();
+    for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(crc_bench_t); bench_id++) {
+        start = read_cycles();
+        uint32_t result = benchmarks[bench_id].crc_func(0, inputMsg, msgSize);
+        stop = read_cycles();
 
-    uint32_t delayVector = stop - start;
-    float throughputVector = (double) delayVector / msgSize; 
+        // checks
+        error += result != (benchmarks[bench_id].be ? golden_be : golden_le);
 
-    start = read_cycles();
-    uint32_t resVectorOpt = crc_be_vector_opt(0, inputMsg, msgSize);
-    stop = read_cycles();
+        uint32_t delay = stop - start;
+        float throughput = (double) delay / msgSize; 
 
-    uint32_t delayVectorOpt = stop - start;
-    float throughputVectorOpt = (double) delayVectorOpt / msgSize; 
+        // full message
+#       ifdef VERBOSE
+        printf("CRC32(msg[%lu]) = %"PRIx32" (%s)      in %u cycle(s) [%.3f cycle(s) per Byte]\n",
+               msgSize, result, benchmarks[bench_id].label, delay, throughput);
+#       else
+        printf("BENCH %lu, %"PRIx32", %s, %u\n", msgSize, result, benchmarks[bench_id].label, delay);
+#       endif
 
-    // FIXME: Zvbc32e needs a specific 4x32-bit vectorRedConstants
-    start = read_cycles();
-    uint32_t resVectorZvbc32e = crc_be_vector_zvbc32e(0, inputMsg, msgSize);
-    stop = read_cycles();
+    }
 
-    uint32_t delayVectorZvbc32e = stop - start;
-    float throughputVectorZvbc32e = (double) delayVectorZvbc32e / msgSize; 
+    free(inputMsg);
 
-    // full message
-#ifdef VERBOSE
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc32_be_generic)      in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resGeneric, delayGeneric, throughputGeneric);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crcEth32_be_vector)    in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVector,  delayVector, throughputVector);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_be_vector_opt)     in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorOpt,  delayVectorOpt, throughputVectorOpt);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_be_vector_zvbc32e) in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorZvbc32e,  delayVectorZvbc32e, throughputVectorZvbc32e);
-#else
-    printf("BENCH %lu %"PRIx32" generic  %u\n", msgSize, resGeneric, delayGeneric);
-    printf("BENCH %lu %"PRIx32" _vector  %u\n", msgSize, resVector,  delayVector);
-    printf("BENCH %lu %"PRIx32" _vecopt  %u\n", msgSize, resVectorOpt,  delayVectorOpt);
-    printf("BENCH %lu %"PRIx32" _zvbc32e %u\n", msgSize, resVectorZvbc32e,  delayVectorZvbc32e);
-#endif // ifdef VERBOSE
-
-    return !(resVector == resGeneric && resVectorOpt == resGeneric);
+    return error;
 }
+
 
 void compute_crc_reduction_constants() {
     uint32_t start = 0, stop = 0;
-    const uint32_t ethCRC32Poly = 0x04C11DB7;
-    const uint32_t ethCRC32PolyInv = 0xedb88320;
 
     // generating constant for vector multiplication
     uint8_t dbgMsg[128] = {0};
@@ -164,62 +181,6 @@ void compute_crc_reduction_constants() {
 #endif // ifdef VERBOSE
 }
 
-int bench_crc_le(void)
-{
-    // Normal order, TODO: check if reverse is required
-    uint32_t ethCRC32PolyInv = 0xedb88320;
-    uint32_t ethCRC32Poly    = 0x04C11DB7; // 0000 0100 1100 0001 0001 1101 1011 0111
-    uint32_t start = 0, stop = 0;
-
-    // initializing tables for CRC32 polynomial (baseline implementation)
-    start = read_cycles();
-    crc32init_le(ethCRC32PolyInv);
-    stop = read_cycles();
-
-#ifdef VERY_VERBOSE
-    printf("CRC32 LE table init in %u cycle(s)\n", stop - start);
-#endif
-
-    size_t msgSize = MSG_SIZES;
-    unsigned char *inputMsg = (unsigned char*) malloc(msgSize);
-    memset(inputMsg, 1, msgSize);
-
-    start = read_cycles();
-    // uint32_t resGeneric = crc32_le_generic(0, inputMsg, 1024, ethCRC32Poly);
-    uint32_t resGeneric = crc32_le_generic(0, inputMsg, msgSize, ethCRC32PolyInv);
-    stop = read_cycles();
-
-    uint32_t delayGeneric = stop - start;
-    float throughputGeneric = (double) delayGeneric / msgSize; 
-
-    start = read_cycles();
-    uint32_t resVector = crcEth32_le_vector(0, inputMsg, msgSize);
-    stop = read_cycles();
-
-    uint32_t delayVector = stop - start;
-    float throughputVector = (double) delayVector / msgSize; 
-
-    start = read_cycles();
-    uint32_t resVectorOpt = crcEth32_le_vector_opt(0, inputMsg, msgSize);
-    stop = read_cycles();
-
-    uint32_t delayVectorOpt = stop - start;
-    float throughputVectorOpt = (double) delayVectorOpt / msgSize; 
-
-
-    // full message
-#ifdef VERBOSE
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc32_le_generic)   in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resGeneric, delayGeneric, throughputGeneric);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crcEth32_le_vector) in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVector,  delayVector, throughputVector);
-    printf("CRC32(msg[%lu]) = %"PRIx32" (crc_le_vector_opt)  in %u cycle(s) [%.3f cycle(s) per Byte]\n", msgSize, resVectorOpt,  delayVectorOpt, throughputVectorOpt);
-#else
-    printf("BENCH %lu %"PRIx32" generic %u\n", msgSize, resGeneric, delayGeneric);
-    printf("BENCH %lu %"PRIx32" _vector %u\n", msgSize, resVector,  delayVector);
-    printf("BENCH %lu %"PRIx32" _vecopt %u\n", msgSize, resVectorOpt,  delayVectorOpt);
-#endif // ifdef VERBOSE
-
-    return !(resVector == resGeneric); //  && resVectorOpt == resGeneric);
-}
 
 int main(void) {
     // define to compute and display the static constants (X^i mod P) = CRC(X^(i-32)) used
@@ -227,5 +188,5 @@ int main(void) {
 #ifdef DISPLAY_REDUCTION_CSTS
     compute_crc_reduction_constants();
 #endif
-    return bench_crc_be() || bench_crc_le();
+    return bench_crc();
 }

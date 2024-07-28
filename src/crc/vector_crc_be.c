@@ -92,7 +92,7 @@ uint32_t crcEth32_be_vector(uint32_t crc, unsigned char const *p, size_t len)
  * @redCsts: reduction consts {X^160, X^96, ...}
  *
  */
-uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len)
+uint32_t crcEth32_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len)
 {
 	int i;
   size_t avl = len / 8; // 8-byte per element

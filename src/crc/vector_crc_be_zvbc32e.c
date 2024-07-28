@@ -19,7 +19,7 @@ uint32_t crc32_be_generic(uint32_t crc, unsigned char const *p,
  * @redCsts: reduction consts {X^160, X^96, ...}
  *
  */
-uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len)
+uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len)
 {
 	int i;
   size_t avl = len / 4; // 4-byte per element
@@ -119,6 +119,5 @@ uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len)
 
   const uint32_t ethCRC32Poly = 0x04C11DB7;
   const uint32_t finalSeed = crc32_be_generic(0, crcAccBufferU8, 16, ethCRC32Poly);
-  printf("finalSeed=%"PRIx32", len=%lu\n", finalSeed, len);
   return  finalSeed ^ crc32_be_generic(0, p, len, ethCRC32Poly);
 }
