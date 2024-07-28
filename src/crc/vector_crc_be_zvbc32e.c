@@ -19,7 +19,7 @@ uint32_t crc32_be_generic(uint32_t crc, unsigned char const *p,
  * @redCsts: reduction consts {X^160, X^96, ...}
  *
  */
-uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len, const uint32_t redCsts[])
+uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len)
 {
 	int i;
   size_t avl = len / 4; // 4-byte per element
@@ -31,8 +31,21 @@ uint32_t crc_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len,
   // F.X^96  by multiplying F.S where S=X^96 [CRCPoly]
   // G.X^128 by multiplying F.T where S=X^128[CRCPoly]
   // H.X^160 by multiplying F.U where S=X^160[CRCPoly]
-  // we expect {(X^160 mod P), (X^128 mod P), (X^96 mod P), (X^64 mod P)}
-  // to be stored in redCsts table
+  // {(X^160 mod P), (X^128 mod P), (X^96 mod P), (X^64 mod P)}
+  // are stored in redCsts table
+  // Those constants were built as follow
+  // {
+  //   uint32_t ethCRC32Poly = 0x04C11DB7;
+  //   uint8_t dbgMsg[17] = {0};
+  //   dbgMsg[0] = 0x1;
+  //   for (int i = 0; i < 4; ++i) redCsts[i] = crc32_be_generic(0, dbgMsg, 1 + 16 - 4 * i, ethCRC32Poly);
+  // }
+  const uint32_t redCsts[4] = {
+    0x17d3315d,
+    0xe8a45605,
+    0xf200aa66,
+    0x490d678d,
+  };
 
    vuint32m1_t redConstantVector = __riscv_vle32_v_u32m1(redCsts, 4);
 

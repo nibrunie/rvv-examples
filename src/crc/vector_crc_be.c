@@ -92,7 +92,7 @@ uint32_t crcEth32_be_vector(uint32_t crc, unsigned char const *p, size_t len)
  * @redCsts: reduction consts {X^160, X^96, ...}
  *
  */
-uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len, const uint32_t redCsts[])
+uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len)
 {
 	int i;
   size_t avl = len / 8; // 8-byte per element
@@ -100,7 +100,12 @@ uint32_t crc_be_vector_opt(uint32_t crc, unsigned char const *p, size_t len, con
   // we take a pair of 64-bit elements (E, F) from the message and reduce
   // E.X^96 by multiplying  E.R where R=X^96[CRCPoly]
   // F.X^160 by multiplying F.S where S=X^160[CRCPoly]
-  // we expect {(X^160 mod P), (X^96 P)} to be stored in redCsts table
+  // {(X^160 mod P), (X^96 P)} are stored in redCsts table
+  const uint32_t redCsts[2] = {
+    0xc5b9cd4c,
+    0xe8a45605,
+  };
+
    vuint32mf2_t redConstantVector = __riscv_vle32_v_u32mf2(redCsts, 2);
    vuint64m1_t extRedCstVector = __riscv_vzext_vf2_u64m1(redConstantVector, 2);
 
