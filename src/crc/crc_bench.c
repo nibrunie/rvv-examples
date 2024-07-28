@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "bench_utils.h"
+
 // setting a default message size (1MiB) if none is defined
 #ifndef MSG_SIZES
 # define MSG_SIZES (1024 * 1024)
@@ -48,21 +50,6 @@ uint32_t crcEth32_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len
 uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len);
 
 
-/** basic counter read function */
-unsigned long read_cycles(void)
-{
-  unsigned long cycles;
-  asm volatile ("rdcycle %0" : "=r" (cycles));
-  return cycles;
-}
-
-unsigned long read_instret(void)
-{
-  unsigned long instret;
-  asm volatile ("rdinstret %0" : "=r" (instret));
-  return instret;
-}
-
 typedef struct {
     uint32_t (*crc_func)(uint32_t seed, unsigned char const* p, size_t len);
     bool be;
@@ -73,17 +60,17 @@ int bench_crc(void) {
     uint32_t start = 0, stop = 0;
 
     // initializing tables for CRC32 polynomial (baseline implementation)
-    start = read_cycles();
+    start = read_perf_counter();
     crc32init_le(ethCRC32PolyInv);
-    stop = read_cycles();
+    stop = read_perf_counter();
 #ifdef VERY_VERBOSE
-    printf("CRC32 LE table init in %u cycle(s)\n", stop - start);
+    printf("CRC32 LE table init in %u " PERF_METRIC "(s)\n", stop - start);
 #endif
-    start = read_cycles();
+    start = read_perf_counter();
     crc32init_be(ethCRC32Poly);
-    stop = read_cycles();
+    stop = read_perf_counter();
 #ifdef VERY_VERBOSE
-    printf("CRC32 BE table init in %u cycle(s)\n", stop - start);
+    printf("CRC32 BE table init in %u " PERF_METRIC "(s)\n", stop - start);
 #endif
 
     crc_bench_t benchmarks[] = {
@@ -112,9 +99,9 @@ int bench_crc(void) {
     int error = 0;
 
     for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(crc_bench_t); bench_id++) {
-        start = read_cycles();
+        start = read_perf_counter();
         uint32_t result = benchmarks[bench_id].crc_func(0, inputMsg, msgSize);
-        stop = read_cycles();
+        stop = read_perf_counter();
 
         // checks
         error += result != (benchmarks[bench_id].be ? golden_be : golden_le);
@@ -124,7 +111,7 @@ int bench_crc(void) {
 
         // full message
 #       ifdef VERBOSE
-        printf("CRC32(msg[%lu]) = %"PRIx32" (%s)      in %u cycle(s) [%.3f cycle(s) per Byte]\n",
+        printf("CRC32(msg[%lu]) = %"PRIx32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
                msgSize, result, benchmarks[bench_id].label, delay, throughput);
 #       else
         printf("BENCH %lu, %"PRIx32", %s, %u\n", msgSize, result, benchmarks[bench_id].label, delay);
@@ -148,12 +135,12 @@ void compute_crc_reduction_constants() {
     for (int i = 32; i <= 128; i +=32) {
         printf("CRC32(X^%d)  = %"PRIx32" (crc32_le_generic)\n", i, crc32_le_generic(0, dbgMsg, 1 + i / 8, ethCRC32PolyInv));
     }
-    start = read_cycles();
+    start = read_perf_counter();
     uint32_t vectorRedConstantsLE[2];
     vectorRedConstantsLE[0] = crc32_le_generic(0, dbgMsg, 1 + 20, ethCRC32Poly); // X^160 mod polynomial
     vectorRedConstantsLE[1] = crc32_le_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^160 mod polynomial
-    stop = read_cycles();
-    printf("crc_le_vector_opt reduction constant table init in %u cycle(s)\n", stop - start);
+    stop = read_perf_counter();
+    printf("crc_le_vector_opt reduction constant table init in %u " PERF_METRIC "(s)\n", stop - start);
     for (int i = 0; i < 2; ++i) printf("[LE] vectorRedConstants[%d] = %"PRIx32"\n", i, vectorRedConstantsLE[i]);
 
 
@@ -163,7 +150,7 @@ void compute_crc_reduction_constants() {
         printf("CRC32(X^%d)  = %"PRIx32" (crc32_be_generic)\n", i, crc32_be_generic(0, dbgMsg, 1 + i / 8, ethCRC32Poly));
     }
 
-    start = read_cycles();
+    start = read_perf_counter();
     uint32_t vectorRedConstantsBE[2];
     vectorRedConstantsBE[0] = crc32_be_generic(0, dbgMsg, 1 + 20, ethCRC32Poly); // X^160 mod polynomial
     vectorRedConstantsBE[1] = crc32_be_generic(0, dbgMsg, 1 + 12, ethCRC32Poly); // X^96 mod polynomial
@@ -174,10 +161,10 @@ void compute_crc_reduction_constants() {
         vectorRedConstantsZvbc32e[i] = crc32_be_generic(0, dbgMsg, 1 + 16 - 4 * i, ethCRC32Poly);
         printf("[BE] vectorRedConstantsZvbc32e[%d] = %"PRIx32"\n", i, vectorRedConstantsZvbc32e[i]);
     }
-    stop = read_cycles();
+    stop = read_perf_counter();
 
 #ifdef VERBOSE
-    printf("crc_be_vector_opt reduction constant table init in %u cycle(s)\n", stop - start);
+    printf("crc_be_vector_opt reduction constant table init in %u " PERF_METRIC "(s)\n", stop - start);
 #endif // ifdef VERBOSE
 }
 
