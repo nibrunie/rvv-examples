@@ -155,6 +155,36 @@ void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     }
 }
 
+/** element-wise multiplication in the NTT domain using Barett's method */
+void ntt_mul_barett(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
+    assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
+    assert(dst->modulo == 3329);
+
+    int d;
+    for (d = 0; d <= dst->degree; d++) {
+        // Barret reduction, with 5039=floor(2^24 / 3329)
+        int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
+        int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
+        dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
+    }
+}
+
+/** element-wise multiplication in the NTT domain using Barett's method,
+ *  with an overestimation of the estimate to faciliate comparison
+ */
+void ntt_mul_barett_v2(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
+    assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
+    assert(dst->modulo == 3329);
+
+    int d;
+    for (d = 0; d <= dst->degree; d++) {
+        // Barret reduction, with 5039=floor(2^24 / 3329)
+        int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
+        int tmp = mul - ((((int64_t) mul * 5040LL) >> 24)) * 3329;
+        dst->coeffs[d] = tmp < 0 ? tmp + 3329 : tmp; 
+    }
+}
+
 /** transform @p src into the polynomial domain back from NTT domain */
 void poly_ntt_inv_transform(polynomial_t* dst, ntt_t src, ring_t ring) {
     assert(dst->degree >= src.degree);
@@ -198,7 +228,8 @@ void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polyno
     poly_ntt_transform(&ntt_lhs, lhs, ring);
     poly_ntt_transform(&ntt_rhs, rhs, ring);
 
-    ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
+    // ntt_mul_barett(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
+    ntt_mul_barett_v2(&ntt_lhs_times_rhs, ntt_lhs, ntt_rhs);
     poly_ntt_inv_transform(dst, ntt_lhs_times_rhs, ring);
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
