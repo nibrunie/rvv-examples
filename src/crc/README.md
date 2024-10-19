@@ -6,8 +6,6 @@ This repository contains a few toy examples of CRC (Cyclic Redundancy Check) imp
 
 Those examples are described in a blog post on https://fprox.substack.com.
 
-
-
 # Using Docker as development environment
 
 ## Building the image
