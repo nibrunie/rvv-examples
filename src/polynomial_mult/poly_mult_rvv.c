@@ -8,9 +8,13 @@
 #include <bench_poly_mult_utils.h>
 
 // function defined in ntt_scala.c
+extern int ringPowers[1][8][64];
+extern int ringInvPowers[1][8][64];
+
 ring_t getRing(int degree);
 void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity);
 void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring); 
+void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][64]);
 void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs); 
 
 /** reinterpret cast help: reinterpreting to a different element size AND signedness */
@@ -66,6 +70,18 @@ void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
     }
 }
 
+void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
+    // 2^level coefficients
+    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x5, 128);
+    vbool16_t mask_even_b16 = __riscv_vreinterpret_v_i8m1_b16(mask_even_i8);
+
+    // extracting even coefficients
+    size_t avl = 128;
+    size_t vl = __riscv_vsetvl_e32m4(avl);
+    vuint32m4_t vec_even_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs, vl);
+    __riscv_vcompress_vm_u16m1(vec_even_coeffs, mask_even_b16, vl);
+}
+
 
 void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
@@ -91,6 +107,27 @@ void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     }
 }
 
+/** dividing each coefficient by the degree */
+void rvv_ntt_degree_scaling(ntt_t* dst, ring_t ring) {
+    size_t avl = dst->degree + 1;
+    int* dst_coeffs = dst->coeffs;
+    for (size_t vl; avl > 0; avl -= vl, dst_coeffs += vl)
+    {
+        // compute loop body vector length from avl (application vector length)
+        vl = __riscv_vsetvl_e32m8(avl);
+        // loading operands
+        vint32m8_t vec = __riscv_vle32_v_i32m8(dst_coeffs, vl);
+        // modulo multiplication (eventually we will want to consider other techniques
+        // than a naive remainder; e.g. Barret's reduction algorithm using a pre-computed
+        // factor from the static modulo).
+        vec = __riscv_vmul_vx_i32m8(vec, ring.invDegree, vl);
+        // modulo reduction
+        vec = __riscv_vrem_vx_i32m8(vec, ring.modulo, vl);
+        // storing results
+        __riscv_vse32_v_i32m8(dst_coeffs, vec, vl);
+    }
+}
+
 void poly_mult_ntt_rvv(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
     // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
@@ -101,12 +138,15 @@ void poly_mult_ntt_rvv(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, po
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    poly_fast_ntt_transform(&ntt_lhs, lhs, ring, ring.rootOfUnity);
-    poly_fast_ntt_transform(&ntt_lhs_times_rhs, rhs, ring, ring.rootOfUnity);
+    poly_fast_ntt_transform_helper(&ntt_lhs, lhs.coeffs, ring, lhs.degree, 1, 0, ringPowers[0]);
+    poly_fast_ntt_transform_helper(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, 1, 0, ringPowers[0]);
 
+    // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    poly_fast_inv_ntt_tranform(dst, ntt_lhs_times_rhs, ring);
+    poly_fast_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, 1, 0, ringInvPowers[0]);
+    // division by the degree
+    rvv_ntt_degree_scaling(dst, ring);
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
     free(ntt_lhs.coeffs);
