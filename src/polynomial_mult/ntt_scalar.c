@@ -42,14 +42,15 @@ static int ring_power(ring_t ring, int lhs, int n) {
 
 /** transform @p src into the NTT domain
  *
- *  The actual polynomial processed by this call is src.coeffs[start::stride]
+ *  The actual polynomial processed by this call is src.coeffs[0::stride]
  *
  *  @param dst destination array for NTT coefficients
  *  @param src input polynomial (original one)
  *  @param ring
  *  @param degree current degree of polynomial input
- *  @param start first index in polynomial coefficient array
  *  @param stride index stride in polynomial coefficient array
+ *  @param level current recursion level (first level of index in rootPowers)
+ *  @param rootPowers shared table of required powers of the root of unity
 */
 void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][64]) {
     if (degree == 0) {
