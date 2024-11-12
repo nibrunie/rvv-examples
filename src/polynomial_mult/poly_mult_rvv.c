@@ -72,17 +72,39 @@ void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
 
 void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
     // 2^level coefficients
-    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x5, 128);
-    vbool16_t mask_even_b16 = __riscv_vreinterpret_v_i8m1_b16(mask_even_i8);
+    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x55, 16);
+    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, 16);
+    // mask type is bool<n> where n in EEW / EMUL (in our case 32 / 8 = 4)
+    vbool4_t mask_even_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_even_i8);
+    vbool4_t mask_odd_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_odd_i8);
 
-    // extracting even coefficients
-    size_t avl = 128;
-    size_t vl = __riscv_vsetvl_e32m4(avl);
-    vuint32m4_t vec_even_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs, vl);
-    __riscv_vcompress_vm_u16m1(vec_even_coeffs, mask_even_b16, vl);
+
+    size_t avl = dst->degree + 1;
+    size_t vl = __riscv_vsetvl_e32m8(avl);
+    // TODO: loop around avl
+    if (1) {
+        // method 1: unit-strided load + vcompress
+        // extracting even coefficients
+        vuint32m8_t vec_even_coeffs = __riscv_vle32_v_u32m8((unsigned int*) coeffs, vl);
+        vec_even_coeffs = __riscv_vcompress_vm_u32m8(vec_even_coeffs, mask_even_b4, vl);
+        vuint32m8_t vec_odd_coeffs = __riscv_vle32_v_u32m8((unsigned int*) coeffs, vl);
+        vec_odd_coeffs = __riscv_vcompress_vm_u32m8(vec_odd_coeffs, mask_odd_b4, vl);
+    } else {
+        // method 2: strided load
+        vuint32m8_t vec_even_coeffs = __riscv_vlse32_v_u32m8((unsigned int*) coeffs, sizeof(coeffs[0]), vl);
+        vuint32m8_t vec_odd_coeffs = __riscv_vlse32_v_u32m8((unsigned int*) (coeffs + 1), sizeof(coeffs[0]), vl);
+    }
 }
 
 
+/**
+ * @brief Multiply two NTT-transformed polynomials
+ * @param dst destination polynomial
+ * @param lhs left-hand-side polynomial
+ * @param rhs right-hand-side polynomial
+ *
+ * @note The destination polynomial must have a degree greater or equal to the maximum of lhs and rhs degrees.
+ */
 void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
 
@@ -101,6 +123,7 @@ void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
         // than a naive remainder; e.g. Barret's reduction algorithm using a pre-computed
         // factor from the static modulo).
         vint32m8_t vec_acc = __riscv_vmul_vv_i32m8(vec_src_lhs, vec_src_rhs, vl);
+        // TODO: consider using a vectorized version of Barret's reduction algorithm
         vec_acc = __riscv_vrem_vx_i32m8(vec_acc, dst->modulo, vl);
         // storing results
         __riscv_vse32_v_i32m8(dst_coeffs, vec_acc, vl);
