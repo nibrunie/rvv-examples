@@ -70,6 +70,64 @@ void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
     }
 }
 
+
+
+/** Compute n-element NTT, assuming level @p level */
+void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][64]) {
+    const size_t coeffWidth = sizeof(coeffs[0]);
+
+    size_t avl = n;
+    ntt_t ntt_even = allocate_poly(n / 2, dst->modulo);
+    ntt_t ntt_odd = allocate_poly(n / 2, dst->modulo);
+    int* even_coeffs = ntt_even.coeffs;
+    int* odd_coeffs = ntt_odd.coeffs; // coeffs + n / 2;
+    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl)
+    {
+        vl = __riscv_vsetvl_e32m8(avl);
+        // splitting even and odd coefficients strided load
+        vint32m8_t vec_even_coeffs = __riscv_vlse32_v_i32m8((int*) coeffs, sizeof(coeffs[0]), vl);
+        vint32m8_t vec_odd_coeffs = __riscv_vlse32_v_i32m8((int*) (coeffs + 1), sizeof(coeffs[0]), vl);
+
+        __riscv_vse32_v_i32m8((int*) even_coeffs, vec_even_coeffs, vl);
+        __riscv_vse32_v_i32m8((int*) odd_coeffs, vec_odd_coeffs, vl);
+    }
+
+    // NTT recursion
+    ntt_t dst_even = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = dst->coeffs, .coeffSize = (n/2)};
+    ntt_t dst_odd = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = (dst->coeffs + n / 2), .coeffSize = (n/2)};
+    rvv_ntt_stage(&dst_even, ntt_even.coeffs, n / 2, level + 1, rootPowers);
+    rvv_ntt_stage(&dst_odd, ntt_odd.coeffs, n / 2, level + 1, rootPowers);
+
+    // TODO: free ntt_even and ntt_odd
+
+    // 
+    avl = n;
+    even_coeffs = dst->coeffs;
+    odd_coeffs = dst->coeffs + n / 2;
+    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl)
+    {
+        vl = __riscv_vsetvl_e32m8(avl);
+        vint32m8_t vec_even_coeffs = __riscv_vle32_v_i32m8((int*) even_coeffs, vl);
+        vint32m8_t vec_odd_coeffs = __riscv_vle32_v_i32m8((int*) odd_coeffs, vl);
+
+        vint32m8_t vec_twiddleFactor = __riscv_vle32_v_i32m8((int*) rootPowers[level], vl);
+
+        // TODO: consider using a vectorized version of Barret's reduction algorithm
+        vint32m8_t vec_odd_results = __riscv_vmul_vv_i32m8(vec_odd_coeffs, vec_twiddleFactor, vl);
+        vint32m8_t vec_even_results = __riscv_vadd_vv_i32m8(vec_even_coeffs, vec_odd_results, vl);
+        // even results
+        vec_even_results = __riscv_vrem_vx_i32m8(vec_even_results, dst->modulo, vl);
+        __riscv_vse32_v_i32m8(even_coeffs, vec_even_results, vl);
+
+        // odd results
+        vec_odd_results = __riscv_vsub_vv_i32m8(vec_even_coeffs, vec_odd_results, vl);
+        vec_odd_results = __riscv_vrem_vx_i32m8(vec_odd_results, dst->modulo, vl);
+        __riscv_vse32_v_i32m8(odd_coeffs, vec_odd_results, vl);
+    }
+
+}
+
+
 void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
     // 2^level coefficients
     vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x55, 16);
