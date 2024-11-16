@@ -113,6 +113,9 @@ int main(void) {
             for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(poly_mult_bench_t); benchId++)
             {
                 memset(dst.coeffs, 0, sizeof(uint32_t) * dst.degree); // resetting array in-between experiments
+#               ifdef VERY_VERBOSE
+                printf("running method: %s\n", benchmarks[benchId].label);
+#               endif // VERY_VERBOSE
 
                 poly_mult_bench_result_t local_result = benchmarks[benchId].bench(&dst, &lhs, &rhs, &modulos[testId], &golden);
 
