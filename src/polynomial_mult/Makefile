@@ -7,6 +7,7 @@ RISCVCLANG=clang  --target=riscv64
 # RISCVCC=clang  --target=riscv64
 # GNU Compiler Collection (GCC)
 RISCVCC=riscv64-unknown-elf-gcc 
+OBJDUMP=riscv64-unknown-elf-objdump
 
 EXTRA_CFLAGS?=-DCOUNT_INSTRET
 
