@@ -71,17 +71,26 @@ void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
 }
 
 
-
-/** Compute n-element NTT, assuming level @p level */
-void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][64]) {
+/** Compute n-element NTT, assuming level @p level
+ *
+ *
+ * @param[out] dst destination buffer for NTT transform result
+ * @param[in] inputs coefficients (must contain @p n elements)
+ * @param n number of coefficients
+ * @param level NTT level (start from 0)
+ * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
+*/
+void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][64]) {
     const size_t coeffWidth = sizeof(coeffs[0]);
 
+    // TODO: optimize for n > 1 (target is to optimize as soon as all coefficients fit in
+    //       a vector register group)
     if (n == 1) {
         dst->coeffs[0] = coeffs[0];
         return;
     }
 
-    size_t avl = n / 2;
+    size_t avl = n / 2; // half of n odd/even coefficients
     ntt_t ntt_even = allocate_poly(n / 2 - 1, dst->modulo);
     ntt_t ntt_odd = allocate_poly(n / 2 - 1, dst->modulo);
     int* even_coeffs = ntt_even.coeffs;
@@ -89,7 +98,7 @@ void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][
     for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs += 2*vl)
     {
         vl = __riscv_vsetvl_e32m8(avl);
-        // splitting even and odd coefficients strided load
+        // splitting even and odd coefficients using strided load
         vint32m8_t vec_even_coeffs = __riscv_vlse32_v_i32m8((int*) coeffs, 2 * sizeof(coeffs[0]), vl);
         vint32m8_t vec_odd_coeffs = __riscv_vlse32_v_i32m8((int*) (coeffs + 1), 2 * sizeof(coeffs[0]), vl);
 
@@ -100,12 +109,13 @@ void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][
     // NTT recursion
     ntt_t dst_even = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = dst->coeffs, .coeffSize = (n/2)};
     ntt_t dst_odd = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = (dst->coeffs + n / 2), .coeffSize = (n/2)};
-    rvv_ntt_stage(&dst_even, ntt_even.coeffs, n / 2, level + 1, rootPowers);
-    rvv_ntt_stage(&dst_odd, ntt_odd.coeffs, n / 2, level + 1, rootPowers);
+    rvv_ntt_transform_helper(&dst_even, ntt_even.coeffs, n / 2, level + 1, rootPowers);
+    rvv_ntt_transform_helper(&dst_odd, ntt_odd.coeffs, n / 2, level + 1, rootPowers);
 
-    // TODO: free ntt_even and ntt_odd
+    free(ntt_even.coeffs);
+    free(ntt_odd.coeffs);
 
-    // 
+    // final stage of the butterfly 
     avl = n / 2;
     assert(avl <= 64); // rootPowers[level] is at most a 64-element array
     even_coeffs = dst->coeffs;
@@ -141,7 +151,7 @@ void rvv_ntt_transform(ntt_t* dst, int* coeffs, ring_t ring, int degree, int roo
     int rootPowers[8][64];
     initRootPowerTable(ring, rootPowers, rootOfUnity);
 
-    rvv_ntt_stage(dst, coeffs, n, 0, rootPowers);
+    rvv_ntt_transform_helper(dst, coeffs, n, 0, rootPowers);
 }
 
 void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
@@ -266,19 +276,30 @@ void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    rvv_ntt_transform(&ntt_lhs, lhs.coeffs, ring, lhs.degree, ring.rootOfUnity);
-    rvv_ntt_transform(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, ring.rootOfUnity);
+    if (1) {
+        // using pre-computed root powers
+        rvv_ntt_transform_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
+        rvv_ntt_transform_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
+    } else {
+        rvv_ntt_transform(&ntt_lhs, lhs.coeffs, ring, lhs.degree, ring.rootOfUnity);
+        rvv_ntt_transform(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, ring.rootOfUnity);
+    }
 
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    rvv_ntt_transform(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, ring.invRootOfUnity);
+    if (1) {
+        // using pre-computed inverse root powers
+        rvv_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0]);
+    } else {
+        rvv_ntt_transform(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, ring.invRootOfUnity);
+    }
     // division by the degree
     rvv_ntt_degree_scaling(dst, ring);
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
-    // free(ntt_lhs.coeffs);
-    // free(ntt_lhs_times_rhs.coeffs);
+    free(ntt_lhs.coeffs);
+    free(ntt_lhs_times_rhs.coeffs);
 }
 
 /** Benchmark wrapper */
