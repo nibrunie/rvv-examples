@@ -76,9 +76,6 @@ void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
 void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][64]) {
     const size_t coeffWidth = sizeof(coeffs[0]);
 
-    size_t avl = n;
-    ntt_t ntt_even = allocate_poly(n / 2, dst->modulo);
-    ntt_t ntt_odd = allocate_poly(n / 2, dst->modulo);
     if (n == 1) {
         dst->coeffs[0] = coeffs[0];
         return;
@@ -271,8 +268,6 @@ void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 
     rvv_ntt_transform(&ntt_lhs, lhs.coeffs, ring, lhs.degree, ring.rootOfUnity);
     rvv_ntt_transform(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, ring.rootOfUnity);
-    printf("lhs polynomial NTT v2:\n");
-    poly_dump(ntt_lhs);
 
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
