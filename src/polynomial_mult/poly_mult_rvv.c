@@ -79,14 +79,22 @@ void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][
     size_t avl = n;
     ntt_t ntt_even = allocate_poly(n / 2, dst->modulo);
     ntt_t ntt_odd = allocate_poly(n / 2, dst->modulo);
+    if (n == 1) {
+        dst->coeffs[0] = coeffs[0];
+        return;
+    }
+
+    size_t avl = n / 2;
+    ntt_t ntt_even = allocate_poly(n / 2 - 1, dst->modulo);
+    ntt_t ntt_odd = allocate_poly(n / 2 - 1, dst->modulo);
     int* even_coeffs = ntt_even.coeffs;
     int* odd_coeffs = ntt_odd.coeffs; // coeffs + n / 2;
-    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl)
+    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs += 2*vl)
     {
         vl = __riscv_vsetvl_e32m8(avl);
         // splitting even and odd coefficients strided load
-        vint32m8_t vec_even_coeffs = __riscv_vlse32_v_i32m8((int*) coeffs, sizeof(coeffs[0]), vl);
-        vint32m8_t vec_odd_coeffs = __riscv_vlse32_v_i32m8((int*) (coeffs + 1), sizeof(coeffs[0]), vl);
+        vint32m8_t vec_even_coeffs = __riscv_vlse32_v_i32m8((int*) coeffs, 2 * sizeof(coeffs[0]), vl);
+        vint32m8_t vec_odd_coeffs = __riscv_vlse32_v_i32m8((int*) (coeffs + 1), 2 * sizeof(coeffs[0]), vl);
 
         __riscv_vse32_v_i32m8((int*) even_coeffs, vec_even_coeffs, vl);
         __riscv_vse32_v_i32m8((int*) odd_coeffs, vec_odd_coeffs, vl);
@@ -101,16 +109,18 @@ void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][
     // TODO: free ntt_even and ntt_odd
 
     // 
-    avl = n;
+    avl = n / 2;
+    assert(avl <= 64); // rootPowers[level] is at most a 64-element array
     even_coeffs = dst->coeffs;
     odd_coeffs = dst->coeffs + n / 2;
-    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl)
+    int* twiddleFactor = rootPowers[level];
+    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     {
         vl = __riscv_vsetvl_e32m8(avl);
         vint32m8_t vec_even_coeffs = __riscv_vle32_v_i32m8((int*) even_coeffs, vl);
         vint32m8_t vec_odd_coeffs = __riscv_vle32_v_i32m8((int*) odd_coeffs, vl);
 
-        vint32m8_t vec_twiddleFactor = __riscv_vle32_v_i32m8((int*) rootPowers[level], vl);
+        vint32m8_t vec_twiddleFactor = __riscv_vle32_v_i32m8((int*) twiddleFactor, vl);
 
         // TODO: consider using a vectorized version of Barret's reduction algorithm
         vint32m8_t vec_odd_results = __riscv_vmul_vv_i32m8(vec_odd_coeffs, vec_twiddleFactor, vl);
@@ -124,9 +134,18 @@ void rvv_ntt_stage(ntt_t* dst, int* coeffs, int n, int level, int rootPowers[8][
         vec_odd_results = __riscv_vrem_vx_i32m8(vec_odd_results, dst->modulo, vl);
         __riscv_vse32_v_i32m8(odd_coeffs, vec_odd_results, vl);
     }
-
 }
 
+void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity);
+
+void rvv_ntt_transform(ntt_t* dst, int* coeffs, ring_t ring, int degree, int rootOfUnity) {
+    const int n = degree + 1;
+    assert(n == 128);
+    int rootPowers[8][64];
+    initRootPowerTable(ring, rootPowers, rootOfUnity);
+
+    rvv_ntt_stage(dst, coeffs, n, 0, rootPowers);
+}
 
 void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
     // 2^level coefficients
@@ -237,4 +256,37 @@ void poly_mult_ntt_rvv(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, po
 /** Benchmark wrapper */
 poly_mult_bench_result_t poly_mult_ntt_rvv_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv, golden);
+}
+
+
+void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    // FIXME: ring structure should be a function argument
+    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // X^128 - 1 Ring:
+    ring_t ring = getRing(dst->degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+
+    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    // used for both right-hand-side and destination NTT
+    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+
+    rvv_ntt_transform(&ntt_lhs, lhs.coeffs, ring, lhs.degree, ring.rootOfUnity);
+    rvv_ntt_transform(&ntt_lhs_times_rhs, rhs.coeffs, ring, rhs.degree, ring.rootOfUnity);
+    printf("lhs polynomial NTT v2:\n");
+    poly_dump(ntt_lhs);
+
+    // element-size multiplication using RVV
+    rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+
+    rvv_ntt_transform(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, ring.invRootOfUnity);
+    // division by the degree
+    rvv_ntt_degree_scaling(dst, ring);
+
+    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
+    // free(ntt_lhs.coeffs);
+    // free(ntt_lhs_times_rhs.coeffs);
+}
+
+/** Benchmark wrapper */
+poly_mult_bench_result_t poly_mult_ntt_rvv_v2_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_v2, golden);
 }
