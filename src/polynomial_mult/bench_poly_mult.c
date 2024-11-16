@@ -24,6 +24,8 @@ poly_mult_bench_result_t poly_mult_fast_ntt_bench(polynomial_t* dst, polynomial_
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_ntt_rvv_v2_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
+
 typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
@@ -54,7 +56,8 @@ int main(void) {
         (poly_mult_bench_t){.bench = poly_mult_mod_baseline_bench,   .label="baseline polynomial multiplication"},
         (poly_mult_bench_t){.bench = poly_mult_ntt_bench,            .label="slow ntt-based multiplication"},
         (poly_mult_bench_t){.bench = poly_mult_fast_ntt_bench,       .label="fast ntt-based multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_bench,        .label="RVV-based ntt-based multiplication "},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_bench,        .label="RVV-based ntt-based multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_v2_bench,     .label="RVV-based ntt-based multiplication v2"},
     };
     int moduloCoeffs[129] = {0};
     moduloCoeffs[0] = -1;
