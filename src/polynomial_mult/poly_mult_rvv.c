@@ -143,8 +143,8 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
     }
 }
 
-#define LMUL 4
-#define E32_MASK 8 // 32 / LMUL
+#define LMUL 8
+#define E32_MASK 4 // 32 / LMUL
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_LMUL_REVARGS(x) LMUL, x
@@ -187,6 +187,58 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define USE_PRECOMPUTED_ROOT_POWERS 1
 #endif // defined(USE_PRECOMPUTED_ROOT_POWERS)
 
+// Coefficient indices generated with script poly_mult_emulation.py
+// The indices listed in ntt_coeff_indices<n> are the byte offset
+// for 32-bit elements in the corresponding n-element coefficient array
+
+// NTT forward pass indices for 8 coeffs:
+const int32_t ntt_coeff_indices_8[] = {
+   0, 16, 8, 24, 4, 20, 12, 28 
+};
+// NTT forward pass indices for 16 coeffs:
+const int32_t ntt_coeff_indices_16[] = {
+   0, 32, 16, 48, 8, 40, 24, 56,
+  4, 36, 20, 52, 12, 44, 28, 60 
+};
+// NTT forward pass indices for 32 coeffs:
+const int32_t ntt_coeff_indices_32[] = {
+   0, 64, 32, 96, 16, 80, 48, 112,
+  8, 72, 40, 104, 24, 88, 56, 120,
+  4, 68, 36, 100, 20, 84, 52, 116,
+  12, 76, 44, 108, 28, 92, 60, 124 
+};
+// NTT forward pass indices for 64 coeffs:
+const int32_t ntt_coeff_indices_64[] = {
+   0, 128, 64, 192, 32, 160, 96, 224,
+  16, 144, 80, 208, 48, 176, 112, 240,
+  8, 136, 72, 200, 40, 168, 104, 232,
+  24, 152, 88, 216, 56, 184, 120, 248,
+  4, 132, 68, 196, 36, 164, 100, 228,
+  20, 148, 84, 212, 52, 180, 116, 244,
+  12, 140, 76, 204, 44, 172, 108, 236,
+  28, 156, 92, 220, 60, 188, 124, 252 
+};
+// NTT forward pass indices for 128 coeffs:
+const int32_t ntt_coeff_indices_128[] = {
+   0, 256, 128, 384, 64, 320, 192, 448,
+  32, 288, 160, 416, 96, 352, 224, 480,
+  16, 272, 144, 400, 80, 336, 208, 464,
+  48, 304, 176, 432, 112, 368, 240, 496,
+  8, 264, 136, 392, 72, 328, 200, 456,
+  40, 296, 168, 424, 104, 360, 232, 488,
+  24, 280, 152, 408, 88, 344, 216, 472,
+  56, 312, 184, 440, 120, 376, 248, 504,
+  4, 260, 132, 388, 68, 324, 196, 452,
+  36, 292, 164, 420, 100, 356, 228, 484,
+  20, 276, 148, 404, 84, 340, 212, 468,
+  52, 308, 180, 436, 116, 372, 244, 500,
+  12, 268, 140, 396, 76, 332, 204, 460,
+  44, 300, 172, 428, 108, 364, 236, 492,
+  28, 284, 156, 412, 92, 348, 220, 476,
+  60, 316, 188, 444, 124, 380, 252, 508 
+};
+
+
 /** Compute n-element NTT, assuming level @p level
  *
  *
@@ -216,89 +268,130 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     MASK_TYPE_E32(vbool) mask_even_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_even_i8);
     MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
 
-    for (local_level = level, n = _n; n > 4; n = n / 2, local_level++) {
-        const int m = 1 << local_level;
-        const int half_n = n / 2;
+    #ifndef FINAL_N
+    #define FINAL_N 4
+    #endif
+    #ifndef USE_INDEXED_LOAD
+    #define USE_INDEXED_LOAD 0
+    #endif
 
-        for (int j = 0, coeffs_a_offset = 0; j < m; j++) {
+    if (USE_INDEXED_LOAD)
+    {
+        size_t avl = _n; // half of n odd/even coefficients
+        int* coeffs_index = ntt_coeff_indices_128;
+        int* dst_coeffs = dst->coeffs;
+        for (size_t vl; avl > 0; avl -= vl, coeffs_index += vl, dst_coeffs += vl)
+        {
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
 
-            if (USE_STRIDED_LOAD) {
-                size_t avl = half_n; // half of n odd/even coefficients
-                int* even_coeffs = coeffs_b + 2 * j * half_n;
-                int* odd_coeffs = even_coeffs + half_n;
-                for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs_a_offset += 2*vl)
-                {
-                    vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-                    // splitting even and odd coefficients using strided load
-                    TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) coeffs_a + coeffs_a_offset, 2 * sizeof(coeffs[0]), vl);
-                    TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) (coeffs_a + coeffs_a_offset+ 1), 2 * sizeof(coeffs[0]), vl);
+            TYPE_LMUL(vuint32) vec_indices = FUNC_LMUL(__riscv_vle32_v_u32)((int*) coeffs_index, vl);
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vluxei32_v_i32)((int*) coeffs_a, vec_indices, vl);
 
-                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl);
-                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl);
-                } 
-            } else {
-                size_t avl = n; // half of n odd/even coefficients
-                int* even_coeffs = coeffs_b + 2 * j * half_n;
-                int* odd_coeffs = even_coeffs + half_n;
-                for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl / 2, odd_coeffs += vl / 2, coeffs_a_offset += vl)
-                {
-                    // using a unit-stride load and a pair of vcompress for the even/odd split
-                    vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-                    TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_a + coeffs_a_offset, vl);
-                    // 2^level coefficients
-                    // mask type is bool<n> where n in EEW / EMUL (in our case 32 / 8 = 4)
-                    TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_even_b4, vl);
-                    TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_odd_b4, vl);
+            FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, vec_coeffs, vl);
+        }
 
-                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl / 2);
-                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl / 2);
+        local_level = 6;
+
+    } else {
+        // initial stage(s) of the explicit coefficient permutations
+        for (local_level = level, n = _n; n > FINAL_N; n = n / 2, local_level++) {
+            const int m = 1 << local_level;
+            const int half_n = n / 2;
+
+            for (int j = 0, coeffs_a_offset = 0; j < m; j++) {
+
+                if (USE_STRIDED_LOAD) {
+                    size_t avl = half_n; // half of n odd/even coefficients
+                    int* even_coeffs = coeffs_b + 2 * j * half_n;
+                    int* odd_coeffs = even_coeffs + half_n;
+                    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs_a_offset += 2*vl)
+                    {
+                        vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                        // splitting even and odd coefficients using strided load
+                        TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) coeffs_a + coeffs_a_offset, 2 * sizeof(coeffs[0]), vl);
+                        TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) (coeffs_a + coeffs_a_offset+ 1), 2 * sizeof(coeffs[0]), vl);
+
+                        FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl);
+                        FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl);
+                    } 
+                } else {
+                    size_t avl = n; // half of n odd/even coefficients
+                    int* even_coeffs = coeffs_b + 2 * j * half_n;
+                    int* odd_coeffs = even_coeffs + half_n;
+                    for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl / 2, odd_coeffs += vl / 2, coeffs_a_offset += vl)
+                    {
+                        // using a unit-stride load and a pair of vcompress for the even/odd split
+                        vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                        TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_a + coeffs_a_offset, vl);
+                        // 2^level coefficients
+                        // mask type is bool<n> where n in EEW / EMUL (in our case 32 / 8 = 4)
+                        TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_even_b4, vl);
+                        TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_odd_b4, vl);
+
+                        FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl / 2);
+                        FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl / 2);
+                    }
                 }
             }
+            // swapping A/B buffers
+            int* tmp = coeffs_a;
+            coeffs_a = coeffs_b;
+            coeffs_b = tmp;
         }
-        // swapping A/B buffers
-        int* tmp = coeffs_a;
-        coeffs_a = coeffs_b;
-        coeffs_b = tmp;
+
+        // final levels
+        if (n == 4) { // allowing the last level to be split out of the previous 2D loop and optimized independently
+            assert(n == 4);
+            vint8m1_t mask_id_i8 = __riscv_vmv_v_x_i8m1(0x99, __riscv_vsetvlmax_e32m1());
+            vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0x44, __riscv_vsetvlmax_e32m1());
+            vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x22, __riscv_vsetvlmax_e32m1());
+            MASK_TYPE_E32(vbool) mask_id_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+            MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+            MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
+
+            // final stage(s) of the explicit coefficient permutations
+            // 4-element butterfly unrolled across the full row dimension
+            // assuming 4-elements fit into the vector register group, no vslideup nor down actually
+            // move any active element outside of the vector register group
+            for (; n > 2; n = n / 2, local_level++) {
+                const int m = 1 << local_level;
+
+                size_t avl = _n;
+                int* coeffs_addr = coeffs_a;
+                int* dst_coeffs = dst->coeffs; // making sure results are stored in the destination buffer
+                for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl, dst_coeffs += vl)
+                {
+                    // using a unit-stride load and a pair of vslide(up/down) to swap each pair of middle
+                    // coefficients within each group of 4 elements.
+                    vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                    TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
+                    TYPE_LMUL(vint32) res_coeffs = vec_coeffs; // a copy is needed to avoid overwriting the middle coefficients
+                    res_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, res_coeffs, vec_coeffs, 1, vl);
+                    res_coeffs = FUNC_LMUL_MASKED(__riscv_vslidedown_vx_i32)(mask_down_b4, res_coeffs, vec_coeffs, 1, vl);
+
+                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, res_coeffs, vl);
+                }
+            }
+        } else {
+        if (coeffs_a != dst->coeffs) {
+            // copying the result back to the destination
+            memcpy(dst->coeffs, coeffs_a, _n * sizeof(int));
+            // TODO: this can certainly be optimized by having different source/destination pointers
+            //       for the first local level of the next loop if the buffer differs
+        }
     }
 
-    // final levels
-    assert(n == 4);
-    vint8m1_t mask_id_i8 = __riscv_vmv_v_x_i8m1(0x99, __riscv_vsetvlmax_e32m1());
-    vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0x44, __riscv_vsetvlmax_e32m1());
-    vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x22, __riscv_vsetvlmax_e32m1());
-    MASK_TYPE_E32(vbool) mask_id_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
-    MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
-    MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
-
-    // 4-element butterfly unrolled across the full row dimension
-    // assuming 4-elements fit into the vector register group, no vslideup nor down actually
-    // move any active element outside of the vector register group
-    for (; n > 2; n = n / 2, local_level++) {
-        const int m = 1 << local_level;
-
-        size_t avl = _n;
-        int* coeffs_addr = coeffs_a;
-        int* dst_coeffs = dst->coeffs; // making sure results are stored in the destination buffer
-        for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl, dst_coeffs += vl)
-        {
-            // using a unit-stride load and a pair of vslide(up/down) to swap each pair of middle
-            // coefficients within each group of 4 elements.
-            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
-            TYPE_LMUL(vint32) res_coeffs = vec_coeffs; // a copy is needed to avoid overwriting the middle coefficients
-            res_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, res_coeffs, vec_coeffs, 1, vl);
-            res_coeffs = FUNC_LMUL_MASKED(__riscv_vslidedown_vx_i32)(mask_down_b4, res_coeffs, vec_coeffs, 1, vl);
-
-            FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, res_coeffs, vl);
-        }
     }
+    // reconstruction stage input should be equal to the destination buffer
+    // (a copy was inserted to ensure this is true)
+    coeffs_a = dst->coeffs;
 
+    // 
     for (n=2, local_level = local_level; local_level >= 0; n = 2 * n, local_level--) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
 
         for (int j = 0; j < m; j++) {
-            // final stage of the butterfly 
             size_t avl = half_n;
             assert(avl <= 64); // rootPowers[level] is at most a 64-element array
             int* even_coeffs = coeffs_a + 2 * j * half_n;
