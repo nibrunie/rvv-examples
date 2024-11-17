@@ -143,6 +143,37 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
     }
 }
 
+#define LMUL 4
+#define E32_MASK 8 // 32 / LMUL
+
+#define BUILD_LMUL_ARGS(x) x, LMUL
+#define BUILD_LMUL_REVARGS(x) LMUL, x
+#define CONCAT(x, y) x ## y
+#define PREPEND_LMUL(x) CONCAT(x, 4) // BUILD_LMUL_ARGS(x))
+#define APPEND_LMUL(x) CONCAT(BUILD_LMUL_REV_ARGS(x))
+#define PREPEND_MASK_E32(x) CONCAT(x, 8) // BUILD_LMUL_ARGS(x))
+
+
+#define _FUNC_LMUL(CMD, SUFFIX) CMD ## SUFFIX
+#define _TYPE_LMUL(FMT, SUFFIX) FMT ## SUFFIX ## _t
+
+#define _FUNC_LMUL_ARG1(ARGS) _FUNC_LMUL(ARGS)
+#define _TYPE_LMUL_ARG1(ARGS) _TYPE_LMUL(ARGS)
+
+#define FUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS(CMD))
+#define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
+#define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32_TYPE(FMT))
+#define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32_FUNC(CMD))
+
+#define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
+#define BUILD_PARAMS_MASK_E32_TYPE(FMT) FMT, E32_MASK
+#define BUILD_PARAMS_MASK_E32_FUNC(CMD) CMD, E32_MASK
+
+// Select between strided loads and vcompress (+ unit-stride load) to perform the odd/even split
+#ifndef USE_STRIDED_LOAD
+#define USE_STRIDED_LOAD 0
+#endif // defined(USE_STRIDED_LOAD)
+
 /** Compute n-element NTT, assuming level @p level
  *
  *
@@ -155,6 +186,8 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]) {
     const size_t coeffWidth = sizeof(coeffs[0]);
 
+    size_t vlmax = FUNC_LMUL(__riscv_vsetvlmax_e32)();
+
     assert(_n > 1);
 
     // A/B buffering for coefficients
@@ -164,24 +197,49 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     // iteration over the local number of coefficients
     int local_level;
     int n;
+    // masks used for the odd/even split using vcompress instructions
+    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x55, __riscv_vsetvlmax_e32m1());
+    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_even_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_even_i8);
+    MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
+
     for (local_level = level, n = _n; n > 2; n = n / 2, local_level++) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
 
         for (int j = 0, coeffs_a_offset = 0; j < m; j++) {
-            size_t avl = half_n; // half of n odd/even coefficients
 
-            int* even_coeffs = coeffs_b + 2 * j * half_n;
-            int* odd_coeffs = even_coeffs + half_n;
-            for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs_a_offset += 2*vl)
-            {
-                vl = __riscv_vsetvl_e32m8(avl);
-                // splitting even and odd coefficients using strided load
-                vint32m8_t vec_even_coeffs = __riscv_vlse32_v_i32m8((int*) coeffs_a + coeffs_a_offset, 2 * sizeof(coeffs[0]), vl);
-                vint32m8_t vec_odd_coeffs = __riscv_vlse32_v_i32m8((int*) (coeffs_a + coeffs_a_offset+ 1), 2 * sizeof(coeffs[0]), vl);
+            if (USE_STRIDED_LOAD) {
+                size_t avl = half_n; // half of n odd/even coefficients
+                int* even_coeffs = coeffs_b + 2 * j * half_n;
+                int* odd_coeffs = even_coeffs + half_n;
+                for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, coeffs_a_offset += 2*vl)
+                {
+                    vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                    // splitting even and odd coefficients using strided load
+                    TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) coeffs_a + coeffs_a_offset, 2 * sizeof(coeffs[0]), vl);
+                    TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vlse32_v_i32)((int*) (coeffs_a + coeffs_a_offset+ 1), 2 * sizeof(coeffs[0]), vl);
 
-                __riscv_vse32_v_i32m8((int*) even_coeffs, vec_even_coeffs, vl);
-                __riscv_vse32_v_i32m8((int*) odd_coeffs, vec_odd_coeffs, vl);
+                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl);
+                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl);
+                } 
+            } else {
+                size_t avl = n; // half of n odd/even coefficients
+                int* even_coeffs = coeffs_b + 2 * j * half_n;
+                int* odd_coeffs = even_coeffs + half_n;
+                for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl / 2, odd_coeffs += vl / 2, coeffs_a_offset += vl)
+                {
+                    // using a unit-stride load and a pair of vcompress for the even/odd split
+                    vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                    TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_a + coeffs_a_offset, vl);
+                    // 2^level coefficients
+                    // mask type is bool<n> where n in EEW / EMUL (in our case 32 / 8 = 4)
+                    TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_even_b4, vl);
+                    TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vcompress_vm_i32)(vec_coeffs, mask_odd_b4, vl);
+
+                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) even_coeffs, vec_even_coeffs, vl / 2);
+                    FUNC_LMUL(__riscv_vse32_v_i32)((int*) odd_coeffs, vec_odd_coeffs, vl / 2);
+                }
             }
         }
         // swapping A/B buffers
@@ -211,28 +269,26 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
             int* twiddleFactor = rootPowers[local_level];
             for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
             {
-                vl = __riscv_vsetvl_e32m8(avl);
-                vint32m8_t vec_even_coeffs = __riscv_vle32_v_i32m8((int*) even_coeffs, vl);
-                vint32m8_t vec_odd_coeffs = __riscv_vle32_v_i32m8((int*) odd_coeffs, vl);
+                vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
+                TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
 
-                vint32m8_t vec_twiddleFactor = __riscv_vle32_v_i32m8((int*) twiddleFactor, vl);
+                TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
 
                 // TODO: consider using a vectorized version of Barret's reduction algorithm
-                vint32m8_t vec_odd_results = __riscv_vmul_vv_i32m8(vec_odd_coeffs, vec_twiddleFactor, vl);
-                vint32m8_t vec_even_results = __riscv_vadd_vv_i32m8(vec_even_coeffs, vec_odd_results, vl);
+                TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
+                TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
                 // even results
-                vec_even_results = __riscv_vrem_vx_i32m8(vec_even_results, dst->modulo, vl);
-                __riscv_vse32_v_i32m8(even_coeffs, vec_even_results, vl);
+                vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
+                FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
 
                 // odd results
-                vec_odd_results = __riscv_vsub_vv_i32m8(vec_even_coeffs, vec_odd_results, vl);
-                vec_odd_results = __riscv_vrem_vx_i32m8(vec_odd_results, dst->modulo, vl);
-                __riscv_vse32_v_i32m8(odd_coeffs, vec_odd_results, vl);
+                vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
+                vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
+                FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
             }
         } 
-
     }
-
 }
 
 void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity);
