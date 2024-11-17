@@ -149,9 +149,13 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_LMUL_REVARGS(x) LMUL, x
 #define CONCAT(x, y) x ## y
-#define PREPEND_LMUL(x) CONCAT(x, 4) // BUILD_LMUL_ARGS(x))
+#define CONCAT3(x, y, z) x ## y ## z
+#define CONCAT_FWD(ARGS) CONCAT(ARGS)
+#define CONCAT3_FWD(ARGS) CONCAT3(ARGS)
+#define PREPEND_LMUL(x) CONCAT_FWD(BUILD_LMUL_ARGS(x))
 #define APPEND_LMUL(x) CONCAT(BUILD_LMUL_REV_ARGS(x))
-#define PREPEND_MASK_E32(x) CONCAT(x, 8) // BUILD_LMUL_ARGS(x))
+#define PREPEND_MASK_E32(x) CONCAT_FWD(BUILD_E32_MASK_ARGS(x))
+#define BUILD_E32_MASK_ARGS(x) x, E32_MASK
 
 
 #define _FUNC_LMUL(CMD, SUFFIX) CMD ## SUFFIX
@@ -161,6 +165,7 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define _TYPE_LMUL_ARG1(ARGS) _TYPE_LMUL(ARGS)
 
 #define FUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS(CMD))
+#define FUNC_LMUL_MASKED(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_LMUL_MASKED(CMD))
 #define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
 #define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32_TYPE(FMT))
 #define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32_FUNC(CMD))
@@ -168,11 +173,19 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
 #define BUILD_PARAMS_MASK_E32_TYPE(FMT) FMT, E32_MASK
 #define BUILD_PARAMS_MASK_E32_FUNC(CMD) CMD, E32_MASK
+#define BUILD_PARAMS_LMUL_MASKED(FMT) FMT, LMUL_MASKED_SUFFIX
+#define LMUL_MASKED_SUFFIX CONCAT3_FWD(BUILD_LMUL_MASKED_SUFFIX_ARGS)
+#define BUILD_LMUL_MASKED_SUFFIX_ARGS m, LMUL, _mu
 
 // Select between strided loads and vcompress (+ unit-stride load) to perform the odd/even split
 #ifndef USE_STRIDED_LOAD
 #define USE_STRIDED_LOAD 0
 #endif // defined(USE_STRIDED_LOAD)
+
+// Select between implementation using a pre-computer array of root powers or not
+#ifndef USE_PRECOMPUTED_ROOT_POWERS
+#define USE_PRECOMPUTED_ROOT_POWERS 1
+#endif // defined(USE_PRECOMPUTED_ROOT_POWERS)
 
 /** Compute n-element NTT, assuming level @p level
  *
@@ -203,7 +216,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     MASK_TYPE_E32(vbool) mask_even_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_even_i8);
     MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
 
-    for (local_level = level, n = _n; n > 2; n = n / 2, local_level++) {
+    for (local_level = level, n = _n; n > 4; n = n / 2, local_level++) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
 
@@ -248,12 +261,36 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         coeffs_b = tmp;
     }
 
-    if (coeffs_a != dst->coeffs) {
-        // copying the result back to the destination
-        memcpy(dst->coeffs, coeffs_a, _n * sizeof(int));
-        // TODO: this can certainly be optimized by having different source/destination pointers
-        //       for the first local level of the next loop if the buffer differs
-        coeffs_a = dst->coeffs;
+    // final levels
+    assert(n == 4);
+    vint8m1_t mask_id_i8 = __riscv_vmv_v_x_i8m1(0x99, __riscv_vsetvlmax_e32m1());
+    vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0x44, __riscv_vsetvlmax_e32m1());
+    vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x22, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_id_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+    MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+    MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
+
+    // 4-element butterfly unrolled across the full row dimension
+    // assuming 4-elements fit into the vector register group, no vslideup nor down actually
+    // move any active element outside of the vector register group
+    for (; n > 2; n = n / 2, local_level++) {
+        const int m = 1 << local_level;
+
+        size_t avl = _n;
+        int* coeffs_addr = coeffs_a;
+        int* dst_coeffs = dst->coeffs; // making sure results are stored in the destination buffer
+        for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl, dst_coeffs += vl)
+        {
+            // using a unit-stride load and a pair of vslide(up/down) to swap each pair of middle
+            // coefficients within each group of 4 elements.
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
+            TYPE_LMUL(vint32) res_coeffs = vec_coeffs; // a copy is needed to avoid overwriting the middle coefficients
+            res_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, res_coeffs, vec_coeffs, 1, vl);
+            res_coeffs = FUNC_LMUL_MASKED(__riscv_vslidedown_vx_i32)(mask_down_b4, res_coeffs, vec_coeffs, 1, vl);
+
+            FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, res_coeffs, vl);
+        }
     }
 
     for (n=2, local_level = local_level; local_level >= 0; n = 2 * n, local_level--) {
@@ -424,7 +461,7 @@ void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    if (1) {
+    if (USE_PRECOMPUTED_ROOT_POWERS) {
         // using pre-computed root powers
         rvv_ntt_transform_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
         rvv_ntt_transform_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
