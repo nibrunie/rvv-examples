@@ -272,6 +272,13 @@ def fast_inv_ntt_transform(ntt: NTTDomain) -> Polynomial:
     return Polynomial([c * dummy_poly.eltRing.invDegree for c in pre_poly_coeffs.coeffs], ntt.eltRing)
 
 
+def ntt_index_generation(n):
+    """ generate the index mapping for NTT forward stage assuming 2^n coefficients """
+    def bit_reverse(i):
+        # :-( using string conversion to reverse bits
+        return int(f"{i:0{n}b}"[::-1], 2)
+    return [bit_reverse(i) for i in range(2**n)]
+
 if __name__ == "__main__":
     # DefaultRing = Ring(19, 3, 11, 7, 13)
     # declaring basis polynomial
@@ -340,3 +347,10 @@ if __name__ == "__main__":
     print("\n bench emulation")
     DefaultRing = Ring.fromModulo(3329, 128)
     print(f"coefficient arithmetic is done in {DefaultRing}")
+
+    for n in [3, 4, 5, 6, 7]:
+        def formatCoeffs(coeffs):
+            # multiply by 4 to get byte indices
+            return ",\n  ".join([", ".join(str(index * 4) for index in s) for s in zip(*(iter(coeffs),) * 8)])
+        print(f"// NTT forward pass indices for {2**n} coeffs:\nconst int32_t ntt_coeff_indices_{2**n}[] = {{\n  ", formatCoeffs(ntt_index_generation(n)), "\n};")
+
