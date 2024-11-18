@@ -143,8 +143,14 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
     }
 }
 
+#ifndef LMUL
 #define LMUL 4
 #define E32_MASK 8 // 32 / LMUL
+#endif
+
+#ifndef E32_MASK
+#error "E32_MASL (32 / LMUL) must be defined"
+#endif
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_LMUL_REVARGS(x) LMUL, x
