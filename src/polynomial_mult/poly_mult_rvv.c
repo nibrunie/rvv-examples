@@ -143,8 +143,8 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
     }
 }
 
-#define LMUL 8
-#define E32_MASK 4 // 32 / LMUL
+#define LMUL 4
+#define E32_MASK 8 // 32 / LMUL
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_LMUL_REVARGS(x) LMUL, x
@@ -188,8 +188,6 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #endif // defined(USE_PRECOMPUTED_ROOT_POWERS)
 
 // Coefficient indices generated with script poly_mult_emulation.py
-// The indices listed in ntt_coeff_indices<n> are the byte offset
-// for 32-bit elements in the corresponding n-element coefficient array
 
 // NTT forward pass indices for 8 coeffs:
 const int32_t ntt_coeff_indices_8[] = {
@@ -238,9 +236,14 @@ const int32_t ntt_coeff_indices_128[] = {
   60, 316, 188, 444, 124, 380, 252, 508 
 };
 
+typedef struct {
+    int _USE_STRIDED_LOAD;
+    int _USE_INDEXED_LOAD;
+    int _FINAL_N;
+} ntt_params_t;
 
 /** Compute n-element NTT, assuming level @p level
- *
+ *  WARNING: non-indexed variant is destructive as coeffs is used as a temporary buffer and overwritten
  *
  * @param[out] dst destination buffer for NTT transform result
  * @param[in] inputs coefficients (must contain @p n elements)
@@ -248,7 +251,7 @@ const int32_t ntt_coeff_indices_128[] = {
  * @param level NTT level (start from 0)
  * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
 */
-void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]) {
+void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64], ntt_params_t params) {
     const size_t coeffWidth = sizeof(coeffs[0]);
 
     size_t vlmax = FUNC_LMUL(__riscv_vsetvlmax_e32)();
@@ -256,6 +259,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     assert(_n > 1);
 
     // A/B buffering for coefficients
+    // TODO/FIXM: non-indexed variant overwrite the coeffs input array
     int* coeffs_a = coeffs;
     int* coeffs_b = dst->coeffs;
 
@@ -268,14 +272,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     MASK_TYPE_E32(vbool) mask_even_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_even_i8);
     MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
 
-    #ifndef FINAL_N
-    #define FINAL_N 4
-    #endif
-    #ifndef USE_INDEXED_LOAD
-    #define USE_INDEXED_LOAD 0
-    #endif
-
-    if (USE_INDEXED_LOAD)
+    if (params._USE_INDEXED_LOAD)
     {
         size_t avl = _n; // half of n odd/even coefficients
         int* coeffs_index = ntt_coeff_indices_128;
@@ -294,13 +291,13 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
 
     } else {
         // initial stage(s) of the explicit coefficient permutations
-        for (local_level = level, n = _n; n > FINAL_N; n = n / 2, local_level++) {
+        for (local_level = level, n = _n; n > params._FINAL_N; n = n / 2, local_level++) {
             const int m = 1 << local_level;
             const int half_n = n / 2;
 
             for (int j = 0, coeffs_a_offset = 0; j < m; j++) {
 
-                if (USE_STRIDED_LOAD) {
+                if (params._USE_STRIDED_LOAD) {
                     size_t avl = half_n; // half of n odd/even coefficients
                     int* even_coeffs = coeffs_b + 2 * j * half_n;
                     int* odd_coeffs = even_coeffs + half_n;
@@ -387,6 +384,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     coeffs_a = dst->coeffs;
 
     // 
+    assert(local_level == 6);
     for (n=2, local_level = local_level; local_level >= 0; n = 2 * n, local_level--) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
@@ -586,7 +584,7 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_v2_bench(polynomial_t* dst, polynomia
 }
 
 
-void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo, ntt_params_t params) {
     // FIXME: ring structure should be a function argument
     // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
     // X^128 - 1 Ring:
@@ -596,13 +594,13 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
 
-    rvv_ntt_transform_fast_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
-    rvv_ntt_transform_fast_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
+    rvv_ntt_transform_fast_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0], params);
+    rvv_ntt_transform_fast_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0], params);
 
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    rvv_ntt_transform_fast_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0]);
+    rvv_ntt_transform_fast_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0], params);
 
     // division by the degree
     rvv_ntt_degree_scaling(dst, ring);
@@ -612,7 +610,30 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     free(ntt_lhs_times_rhs.coeffs);
 }
 
+void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
+}
+
+void poly_mult_ntt_rvv_compressed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
+}
+
+void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_indexed);
+}
+
 /** Benchmark wrapper */
-poly_mult_bench_result_t poly_mult_ntt_rvv_v3_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
-    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_v3, golden);
+poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_strided, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_compressed, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_indexed, golden);
 }
