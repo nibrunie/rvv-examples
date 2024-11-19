@@ -32,6 +32,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, poly
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
+
 typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
@@ -67,6 +69,7 @@ int main(void) {
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_bench,    .label="RVV-based ntt-based multiplication split-loops no-recursion indexed-load"},
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_strided_bench,    .label="RVV-based ntt-based multiplication split-loops no-recursion strided-load"},
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based with Barrett reduction"}, 
     };
     int moduloCoeffs[129] = {0};
     moduloCoeffs[0] = -1;
@@ -126,9 +129,15 @@ int main(void) {
                 printf("running method: %s\n", benchmarks[benchId].label);
 #               endif // VERY_VERBOSE
 
-                poly_mult_bench_result_t local_result = benchmarks[benchId].bench(&dst, &lhs, &rhs, &modulos[testId], &golden);
+                polynomial_t lhs_copy = copy_poly(lhs);
+                polynomial_t rhs_copy = copy_poly(rhs);
+
+                poly_mult_bench_result_t local_result = benchmarks[benchId].bench(&dst, &lhs_copy, &rhs_copy, &modulos[testId], &golden);
 
                 benchmarks[benchId].result = accumulate_bench_result(benchmarks[benchId].result, local_result);
+
+                free(lhs_copy.coeffs);
+                free(rhs_copy.coeffs);
 
 #               ifdef VERY_VERBOSE
                 printf("%s result:\n", benchmarks[benchId].label);

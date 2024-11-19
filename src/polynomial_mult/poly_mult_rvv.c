@@ -246,6 +246,7 @@ typedef struct {
     int _USE_STRIDED_LOAD;
     int _USE_INDEXED_LOAD;
     int _FINAL_N;
+    int _BARRETT_RED;
 } ntt_params_t;
 
 /** Compute n-element NTT, assuming level @p level
@@ -409,16 +410,40 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
 
                 TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
 
-                // TODO: consider using a vectorized version of Barret's reduction algorithm
-                TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
-                TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
-                // even results
-                vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
-                FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+                TYPE_LMUL(vint32) vec_odd_results;
+                TYPE_LMUL(vint32) vec_even_results;
 
-                // odd results
+                vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
+                vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
                 vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
-                vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
+
+                if (params._BARRETT_RED) {
+                    // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
+                    // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
+                    // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
+                    vint64m2_t vec_wodd_results = __riscv_vwmul_vx_i64m2(vec_odd_results, 5039, vl);
+                    vint32m1_t vec_tmp_results = __riscv_vnsra_wx_i32m1(vec_wodd_results, 24, vl);
+                    vec_odd_results = __riscv_vnmsac_vx_i32m1(vec_odd_results, 3329, vec_tmp_results, vl);
+                    vbool32_t cmp_mask = __riscv_vmsge_vx_i32m1_b32(vec_odd_results, 3329, vl);
+                    vec_tmp_results = __riscv_vmv_v_x_i32m1(0, vl);
+                    vec_tmp_results = __riscv_vmerge_vxm_i32m1(vec_tmp_results, -3329, cmp_mask, vl);
+                    vec_odd_results = __riscv_vadd_vv_i32m1(vec_odd_results, vec_tmp_results, vl);
+                    vint64m2_t vec_weven_results = __riscv_vwmul_vx_i64m2(vec_even_results, 5039, vl);
+                    vec_tmp_results = __riscv_vnsra_wx_i32m1(vec_weven_results, 24, vl);
+                    vec_even_results = __riscv_vnmsac_vx_i32m1(vec_even_results, 3329, vec_tmp_results, vl);
+                    cmp_mask = __riscv_vmsge_vx_i32m1_b32(vec_even_results, 3329, vl);
+                    vec_tmp_results = __riscv_vmv_v_x_i32m1(0, vl);
+                    vec_tmp_results = __riscv_vmerge_vxm_i32m1(vec_tmp_results, -3329, cmp_mask, vl);
+                    vec_even_results = __riscv_vadd_vv_i32m1(vec_even_results, vec_tmp_results, vl);
+                } else {
+                    // even results
+                    vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
+
+                    // odd results
+                    vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
+                }
+
+                FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
                 FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
             }
         } 
@@ -617,23 +642,32 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 }
 
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4};
+    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
 }
 
 void poly_mult_ntt_rvv_compressed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
 void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4};
+    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_indexed);
+}
+
+void poly_mult_ntt_rvv_compressed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
 /** Benchmark wrapper */
 poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_strided, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_compressed_barrett, golden);
 }
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
