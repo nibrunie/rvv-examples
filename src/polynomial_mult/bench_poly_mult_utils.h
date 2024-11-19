@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct {
   int n;
@@ -31,6 +32,14 @@ static polynomial_t allocate_poly(int degree, int modulo) {
   res.coeffSize = degree + 1;
   res.modulo = modulo;
   res.coeffs = (int*) malloc(sizeof(int) * (res.coeffSize));
+  return res;
+}
+
+static polynomial_t copy_poly(polynomial_t poly) {
+  int degree = poly.degree;
+  int modulo = poly.modulo;
+  polynomial_t res = allocate_poly(degree, modulo);
+  memcpy(res.coeffs, poly.coeffs, sizeof(int) * res.coeffSize);
   return res;
 }
 
