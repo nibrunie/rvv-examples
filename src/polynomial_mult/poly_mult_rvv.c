@@ -166,17 +166,21 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 
 #define _FUNC_LMUL(CMD, SUFFIX) CMD ## SUFFIX
 #define _TYPE_LMUL(FMT, SUFFIX) FMT ## SUFFIX ## _t
+#define _FUNC_LMUL_2PART(CMD0, CMD1, SUFFIX) CMD0 ## SUFFIX ## CMD1 ## SUFFIX
 
 #define _FUNC_LMUL_ARG1(ARGS) _FUNC_LMUL(ARGS)
 #define _TYPE_LMUL_ARG1(ARGS) _TYPE_LMUL(ARGS)
+#define _FUNC_LMUL_2PART_ARG1(ARGS) _FUNC_LMUL_2PART(ARGS)
 
 #define FUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS(CMD))
+#define FUNC_LMUL_2PART(CMD0,CMD1) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_2PART(CMD0,CMD1))
 #define FUNC_LMUL_MASKED(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_LMUL_MASKED(CMD))
 #define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
 #define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32_TYPE(FMT))
 #define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32_FUNC(CMD))
 
 #define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
+#define BUILD_PARAMS_2PART(CMD0,CMD1) CMD0, CMD1, PREPEND_LMUL(m)
 #define BUILD_PARAMS_MASK_E32_TYPE(FMT) FMT, E32_MASK
 #define BUILD_PARAMS_MASK_E32_FUNC(CMD) CMD, E32_MASK
 #define BUILD_PARAMS_LMUL_MASKED(FMT) FMT, LMUL_MASKED_SUFFIX
@@ -437,6 +441,44 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     }
 
     // optimize n=4 case (vslide(up/down) which 0x33 and 0xcc masks)
+    if (params._UNROLL_STOP < 5) {
+        assert (n == 4 && local_level == 5);
+        size_t avl = _n;
+        int* coeffs_addr = coeffs_a;
+
+        vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x33, __riscv_vsetvlmax_e32m1());
+        vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
+        MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
+        MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+
+        // TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle64_v_i32)((int*) rootPowers[local_level], 2);
+        // using a 64-bit strided store with stride=0 to duplicate 2-element twiddle factor
+        // across the vector register group
+        TYPE_LMUL(vint32) vec_twiddleFactor = 
+        FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL(__riscv_vlse64_v_i64)((int64_t*) rootPowers[local_level], 0, FUNC_LMUL(__riscv_vsetvlmax_e64)()));
+
+        for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl)
+        {
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
+            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
+            
+            // swapping odd/even pairs of coefficients
+            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 2, vl);
+            vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, 2, vl);
+
+            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
+            vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
+
+            // TODO: optimize modulo reduction
+            vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, dst->modulo, vl);
+            FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
+        }
+        n = 2 * n;
+        local_level--;
+    }
+
     // optimize n=8 case (vslide(up/down) which 0x0f and 0xf0 masks)
 
     // 
@@ -470,20 +512,20 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
                     // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
                     // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
                     // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
-                    vint64m2_t vec_wodd_results = __riscv_vwmul_vx_i64m2(vec_odd_results, 5039, vl);
-                    vint32m1_t vec_tmp_results = __riscv_vnsra_wx_i32m1(vec_wodd_results, 24, vl);
-                    vec_odd_results = __riscv_vnmsac_vx_i32m1(vec_odd_results, 3329, vec_tmp_results, vl);
-                    vbool32_t cmp_mask = __riscv_vmsge_vx_i32m1_b32(vec_odd_results, 3329, vl);
-                    vec_tmp_results = __riscv_vmv_v_x_i32m1(0, vl);
-                    vec_tmp_results = __riscv_vmerge_vxm_i32m1(vec_tmp_results, -3329, cmp_mask, vl);
-                    vec_odd_results = __riscv_vadd_vv_i32m1(vec_odd_results, vec_tmp_results, vl);
-                    vint64m2_t vec_weven_results = __riscv_vwmul_vx_i64m2(vec_even_results, 5039, vl);
-                    vec_tmp_results = __riscv_vnsra_wx_i32m1(vec_weven_results, 24, vl);
-                    vec_even_results = __riscv_vnmsac_vx_i32m1(vec_even_results, 3329, vec_tmp_results, vl);
-                    cmp_mask = __riscv_vmsge_vx_i32m1_b32(vec_even_results, 3329, vl);
-                    vec_tmp_results = __riscv_vmv_v_x_i32m1(0, vl);
-                    vec_tmp_results = __riscv_vmerge_vxm_i32m1(vec_tmp_results, -3329, cmp_mask, vl);
-                    vec_even_results = __riscv_vadd_vv_i32m1(vec_even_results, vec_tmp_results, vl);
+                    vint64m8_t vec_wodd_results = __riscv_vwmul_vx_i64m8(vec_odd_results, 5039, vl);
+                    TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wodd_results, 24, vl);
+                    vec_odd_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_odd_results, 3329, vec_tmp_results, vl);
+                    MASK_TYPE_E32(vbool) cmp_mask = MASK_FUNC_E32(__riscv_vmsge_vx_i32m4_b)(vec_odd_results, 3329, vl);
+                    vec_tmp_results = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
+                    vec_tmp_results = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
+                    vec_odd_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_odd_results, vec_tmp_results, vl);
+                    vint64m8_t vec_weven_results = __riscv_vwmul_vx_i64m8(vec_even_results, 5039, vl);
+                    vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_weven_results, 24, vl);
+                    vec_even_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_even_results, 3329, vec_tmp_results, vl);
+                    cmp_mask = MASK_FUNC_E32(__riscv_vmsge_vx_i32m4_b)(vec_even_results, 3329, vl);
+                    vec_tmp_results  = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
+                    vec_tmp_results  = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
+                    vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_results, vec_tmp_results, vl);
                 } else {
                     // even results
                     vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
@@ -706,7 +748,7 @@ void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t
 }
 
 void poly_mult_ntt_rvv_compressed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 5};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 4};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
