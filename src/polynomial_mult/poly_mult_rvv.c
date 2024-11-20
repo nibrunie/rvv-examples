@@ -242,11 +242,25 @@ const int32_t ntt_coeff_indices_128[] = {
   60, 316, 188, 444, 124, 380, 252, 508 
 };
 
+
+// Function to display each element of a vint32m1_t vector
+void display_vint32m1_t(vint32m1_t vec, size_t vl) {
+    int32_t elements[vl];
+    __riscv_vse32_v_i32m1(elements, vec, vl);
+
+    printf("Vector elements: ");
+    for (size_t i = 0; i < vl; i++) {
+        printf("%d ", elements[i]);
+    }
+    printf("\n");
+}
+
 typedef struct {
     int _USE_STRIDED_LOAD;
     int _USE_INDEXED_LOAD;
     int _FINAL_N;
     int _BARRETT_RED;
+    int _UNROLL_STOP;
 } ntt_params_t;
 
 /** Compute n-element NTT, assuming level @p level
@@ -346,10 +360,8 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         // final levels
         if (n == 4) { // allowing the last level to be split out of the previous 2D loop and optimized independently
             assert(n == 4);
-            vint8m1_t mask_id_i8 = __riscv_vmv_v_x_i8m1(0x99, __riscv_vsetvlmax_e32m1());
             vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0x44, __riscv_vsetvlmax_e32m1());
             vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x22, __riscv_vsetvlmax_e32m1());
-            MASK_TYPE_E32(vbool) mask_id_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
             MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
             MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
 
@@ -390,9 +402,46 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     // (a copy was inserted to ensure this is true)
     coeffs_a = dst->coeffs;
 
+    assert(n == 2);
+    // optimize n=2 case (vslide(up/down) which 0x55 and 0xAA masks)
+    if (params._UNROLL_STOP < 6) {
+        assert (n == 2 && local_level == 6);
+        size_t avl = _n;
+        int* coeffs_addr = coeffs_a;
+
+        vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x55, __riscv_vsetvlmax_e32m1());
+        vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xaa, __riscv_vsetvlmax_e32m1());
+        MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
+        MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
+
+        // first level, no need to multiply by any twiddle factor
+        // because this level the factor is twiddleFactor^0 = 1
+        for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl)
+        {
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
+            
+            // swapping odd/even pairs of coefficients
+            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 1, vl);
+            vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
+
+            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
+            vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
+
+            // Note: no modulo reduction is performed
+            FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
+        }
+        n = 2 * n;
+        local_level--;
+    }
+
+    // optimize n=4 case (vslide(up/down) which 0x33 and 0xcc masks)
+    // optimize n=8 case (vslide(up/down) which 0x0f and 0xf0 masks)
+
     // 
-    assert(local_level == 6);
-    for (n=2, local_level = local_level; local_level >= 0; n = 2 * n, local_level--) {
+    assert(local_level == params._UNROLL_STOP && n == 2 << (6 - params._UNROLL_STOP));
+    for (; local_level >= 0; n = 2 * n, local_level--) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
 
@@ -642,22 +691,22 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 }
 
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0};
+    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
 }
 
 void poly_mult_ntt_rvv_compressed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
 void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 0};
+    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_indexed);
 }
 
 void poly_mult_ntt_rvv_compressed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 5};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
