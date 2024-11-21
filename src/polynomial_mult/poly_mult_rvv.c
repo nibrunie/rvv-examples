@@ -150,12 +150,15 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #endif
 
 #ifndef E32_MASK
-#error "E32_MASL (32 / LMUL) must be defined"
+#error "E32_MASK (32 / LMUL) must be defined"
+#endif
+
+#ifndef WLMUL
+#error "WLMUL (2 * LMUL) must be defined"
 #endif
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_WLMUL_ARGS(x) x, WLMUL
-#define BUILD_LMUL_REVARGS(x) LMUL, x
 #define CONCAT(x, y) x ## y
 #define CONCAT3(x, y, z) x ## y ## z
 #define CONCAT_FWD(ARGS) CONCAT(ARGS)
@@ -163,8 +166,6 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define PREPEND_LMUL(x) CONCAT_FWD(BUILD_LMUL_ARGS(x))
 #define PREPEND_WLMUL(x) CONCAT_FWD(BUILD_WLMUL_ARGS(x))
 #define APPEND_LMUL(x) CONCAT(BUILD_LMUL_REV_ARGS(x))
-#define PREPEND_MASK_E32(x) CONCAT_FWD(BUILD_E32_MASK_ARGS(x))
-#define BUILD_E32_MASK_ARGS(x) x, E32_MASK
 
 
 #define _FUNC_LMUL(CMD, SUFFIX) CMD ## SUFFIX
@@ -181,25 +182,18 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #define FUNC_LMUL_MASKED(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_LMUL_MASKED(CMD))
 #define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
 #define WTYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_WPARAMS(FMT))
-#define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32_TYPE(FMT))
-#define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32_FUNC(CMD))
+#define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32(FMT))
+#define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32(CMD))
 #define MASK_LMUL_FUNC_E32(CMD) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD))
 
 #define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
 #define BUILD_WPARAMS(FMT) FMT, PREPEND_WLMUL(m)
 #define BUILD_PARAMS_2PART(CMD0,CMD1) CMD0, PREPEND_LMUL(m), CMD1, PREPEND_LMUL(m)
-#define BUILD_PARAMS_MASK_E32_2PART(CMD0,CMD1) CMD0, PREPEND_LMUL(m), CMD1, PREPEND_LMUL(m)
-#define BUILD_PARAMS_MASK_E32_TYPE(FMT) FMT, E32_MASK
-#define BUILD_PARAMS_MASK_E32_FUNC(CMD) CMD, E32_MASK
+#define BUILD_PARAMS_MASK_E32(FMT) FMT, E32_MASK
 #define BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD) CMD, PREPEND_LMUL(m), _b, E32_MASK
 #define BUILD_PARAMS_LMUL_MASKED(FMT) FMT, LMUL_MASKED_SUFFIX
 #define LMUL_MASKED_SUFFIX CONCAT3_FWD(BUILD_LMUL_MASKED_SUFFIX_ARGS)
 #define BUILD_LMUL_MASKED_SUFFIX_ARGS m, LMUL, _mu
-
-// Select between strided loads and vcompress (+ unit-stride load) to perform the odd/even split
-#ifndef USE_STRIDED_LOAD
-#define USE_STRIDED_LOAD 0
-#endif // defined(USE_STRIDED_LOAD)
 
 // Select between implementation using a pre-computer array of root powers or not
 #ifndef USE_PRECOMPUTED_ROOT_POWERS
@@ -207,7 +201,6 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #endif // defined(USE_PRECOMPUTED_ROOT_POWERS)
 
 // Coefficient indices generated with script poly_mult_emulation.py
-
 // NTT forward pass indices for 8 coeffs:
 const int32_t ntt_coeff_indices_8[] = {
    0, 16, 8, 24, 4, 20, 12, 28 
