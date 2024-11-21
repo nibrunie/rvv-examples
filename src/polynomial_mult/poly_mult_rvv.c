@@ -144,8 +144,9 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 }
 
 #ifndef LMUL
-#define LMUL 4
-#define E32_MASK 8 // 32 / LMUL
+#define LMUL 2
+#define WLMUL 4 // 2 * LMUL (for widening)
+#define E32_MASK 16 // 32 / LMUL
 #endif
 
 #ifndef E32_MASK
@@ -153,12 +154,14 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #endif
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
+#define BUILD_WLMUL_ARGS(x) x, WLMUL
 #define BUILD_LMUL_REVARGS(x) LMUL, x
 #define CONCAT(x, y) x ## y
 #define CONCAT3(x, y, z) x ## y ## z
 #define CONCAT_FWD(ARGS) CONCAT(ARGS)
 #define CONCAT3_FWD(ARGS) CONCAT3(ARGS)
 #define PREPEND_LMUL(x) CONCAT_FWD(BUILD_LMUL_ARGS(x))
+#define PREPEND_WLMUL(x) CONCAT_FWD(BUILD_WLMUL_ARGS(x))
 #define APPEND_LMUL(x) CONCAT(BUILD_LMUL_REV_ARGS(x))
 #define PREPEND_MASK_E32(x) CONCAT_FWD(BUILD_E32_MASK_ARGS(x))
 #define BUILD_E32_MASK_ARGS(x) x, E32_MASK
@@ -166,23 +169,29 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 
 #define _FUNC_LMUL(CMD, SUFFIX) CMD ## SUFFIX
 #define _TYPE_LMUL(FMT, SUFFIX) FMT ## SUFFIX ## _t
-#define _FUNC_LMUL_2PART(CMD0, CMD1, SUFFIX) CMD0 ## SUFFIX ## CMD1 ## SUFFIX
+#define _FUNC_LMUL_2PART(CMD0, SUFFIX0, CMD1, SUFFIX1) CMD0 ## SUFFIX0 ## CMD1 ## SUFFIX1
 
 #define _FUNC_LMUL_ARG1(ARGS) _FUNC_LMUL(ARGS)
 #define _TYPE_LMUL_ARG1(ARGS) _TYPE_LMUL(ARGS)
 #define _FUNC_LMUL_2PART_ARG1(ARGS) _FUNC_LMUL_2PART(ARGS)
 
 #define FUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS(CMD))
+#define WFUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_WPARAMS(CMD))
 #define FUNC_LMUL_2PART(CMD0,CMD1) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_2PART(CMD0,CMD1))
 #define FUNC_LMUL_MASKED(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_LMUL_MASKED(CMD))
 #define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
+#define WTYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_WPARAMS(FMT))
 #define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32_TYPE(FMT))
 #define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32_FUNC(CMD))
+#define MASK_LMUL_FUNC_E32(CMD) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD))
 
 #define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
-#define BUILD_PARAMS_2PART(CMD0,CMD1) CMD0, CMD1, PREPEND_LMUL(m)
+#define BUILD_WPARAMS(FMT) FMT, PREPEND_WLMUL(m)
+#define BUILD_PARAMS_2PART(CMD0,CMD1) CMD0, PREPEND_LMUL(m), CMD1, PREPEND_LMUL(m)
+#define BUILD_PARAMS_MASK_E32_2PART(CMD0,CMD1) CMD0, PREPEND_LMUL(m), CMD1, PREPEND_LMUL(m)
 #define BUILD_PARAMS_MASK_E32_TYPE(FMT) FMT, E32_MASK
 #define BUILD_PARAMS_MASK_E32_FUNC(CMD) CMD, E32_MASK
+#define BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD) CMD, PREPEND_LMUL(m), _b, E32_MASK
 #define BUILD_PARAMS_LMUL_MASKED(FMT) FMT, LMUL_MASKED_SUFFIX
 #define LMUL_MASKED_SUFFIX CONCAT3_FWD(BUILD_LMUL_MASKED_SUFFIX_ARGS)
 #define BUILD_LMUL_MASKED_SUFFIX_ARGS m, LMUL, _mu
@@ -512,17 +521,17 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
                     // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
                     // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
                     // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
-                    vint64m8_t vec_wodd_results = __riscv_vwmul_vx_i64m8(vec_odd_results, 5039, vl);
+                    WTYPE_LMUL(vint64) vec_wodd_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(vec_odd_results, 5039, vl);
                     TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wodd_results, 24, vl);
                     vec_odd_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_odd_results, 3329, vec_tmp_results, vl);
-                    MASK_TYPE_E32(vbool) cmp_mask = MASK_FUNC_E32(__riscv_vmsge_vx_i32m4_b)(vec_odd_results, 3329, vl);
+                    MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(vec_odd_results, 3329, vl);
                     vec_tmp_results = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
                     vec_tmp_results = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
                     vec_odd_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_odd_results, vec_tmp_results, vl);
-                    vint64m8_t vec_weven_results = __riscv_vwmul_vx_i64m8(vec_even_results, 5039, vl);
+                    WTYPE_LMUL(vint64) vec_weven_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(vec_even_results, 5039, vl);
                     vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_weven_results, 24, vl);
                     vec_even_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_even_results, 3329, vec_tmp_results, vl);
-                    cmp_mask = MASK_FUNC_E32(__riscv_vmsge_vx_i32m4_b)(vec_even_results, 3329, vl);
+                    cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(vec_even_results, 3329, vl);
                     vec_tmp_results  = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
                     vec_tmp_results  = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
                     vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_results, vec_tmp_results, vl);
