@@ -453,11 +453,6 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
         MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
 
-        // TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle64_v_i32)((int*) rootPowers[local_level], 2);
-        // using a 64-bit strided store with stride=0 to duplicate 2-element twiddle factor
-        // across the vector register group
-        // TYPE_LMUL(vint32) vec_twiddleFactor = 
-        // FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL(__riscv_vlse64_v_i64)((int64_t*) rootPowers[local_level], 0, FUNC_LMUL(__riscv_vsetvlmax_e64)()));
         // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
         TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
 
@@ -486,8 +481,9 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     }
 
     // optimize n=8 case (vslide(up/down) which 0x0f and 0xf0 masks)
-    if (params._UNROLL_STOP < 4) {
+    if (params._UNROLL_STOP < 4 && n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()) {
         assert (n == 8 && local_level == 4);
+        assert(n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n must fit in vlmax for current LMUL
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
 
@@ -496,14 +492,8 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
         MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
 
-        // TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle64_v_i32)((int*) rootPowers[local_level], 2);
-        // using a 64-bit strided store with stride=0 to duplicate 2-element twiddle factor
-        // across the vector register group
-        //TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL(__riscv_vlse64_v_i64)((int64_t*) rootPowers[local_level], 0, FUNC_LMUL(__riscv_vsetvlmax_e64)()));
-        avl = _n / 2 - n / 2;
         // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
         TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
-        // TODO
 
         avl = _n;
 
@@ -529,8 +519,9 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         local_level--;
     }
 
-    // 
-    assert(local_level == params._UNROLL_STOP && n == 2 << (6 - params._UNROLL_STOP));
+    // disabling assert to allow skipping some optimization levels due to LMUL too small to fit
+    // a local element group to perform swapping 
+    // assert(local_level == params._UNROLL_STOP && n == 2 << (6 - params._UNROLL_STOP));
     for (; local_level >= 0; n = 2 * n, local_level--) {
         const int m = 1 << local_level;
         const int half_n = n / 2;
@@ -796,6 +787,11 @@ void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t
 }
 
 void poly_mult_ntt_rvv_compressed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
+}
+
+void poly_mult_ntt_rvv_indexed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
@@ -807,6 +803,10 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, poly
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_compressed_barrett, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_indexed_barrett, golden);
 }
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
