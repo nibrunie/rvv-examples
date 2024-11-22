@@ -261,6 +261,21 @@ void display_vint32(TYPE_LMUL(vint32) vec, size_t vl) {
     printf("\n");
 }
 
+inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
+    // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
+    // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
+    // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
+    WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
+    TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
+    v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
+    MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
+    vec_tmp_results = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
+    vec_tmp_results = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
+    v = FUNC_LMUL(__riscv_vadd_vv_i32)(v, vec_tmp_results, vl);
+
+    return v;
+}
+
 typedef struct {
     int _USE_STRIDED_LOAD;
     int _USE_INDEXED_LOAD;
@@ -548,23 +563,8 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
                 vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
 
                 if (params._BARRETT_RED) {
-                    // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
-                    // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
-                    // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
-                    WTYPE_LMUL(vint64) vec_wodd_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(vec_odd_results, 5039, vl);
-                    TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wodd_results, 24, vl);
-                    vec_odd_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_odd_results, 3329, vec_tmp_results, vl);
-                    MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(vec_odd_results, 3329, vl);
-                    vec_tmp_results = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
-                    vec_tmp_results = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
-                    vec_odd_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_odd_results, vec_tmp_results, vl);
-                    WTYPE_LMUL(vint64) vec_weven_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(vec_even_results, 5039, vl);
-                    vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_weven_results, 24, vl);
-                    vec_even_results = FUNC_LMUL(__riscv_vnmsac_vx_i32)(vec_even_results, 3329, vec_tmp_results, vl);
-                    cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(vec_even_results, 3329, vl);
-                    vec_tmp_results  = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
-                    vec_tmp_results  = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
-                    vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_results, vec_tmp_results, vl);
+                    vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
+                    vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
                 } else {
                     // even results
                     vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
