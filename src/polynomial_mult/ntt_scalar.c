@@ -82,12 +82,23 @@ void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int de
 
 /** Flag to indicate that ring structures (included tabulated root powers) have been initialized */
 int ringInit = 0;
+int ringInitReplicate = 1;
 
 /** Shared tabulated arrays of root powers */
 int ringPowers[1][8][64];
 int ringInvPowers[1][8][64];
 
-void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity) {
+
+/** initialize a table of powers of the root of unity
+ *
+ *
+ * @param ring mathematical ring used for the computation
+ * @param[out] rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ (2 ^ level)) ^ i
+ * @param rootOfUnity current root of unity used
+ * @param replicate if true, replicate row pattern in the table (to allow vector use)
+ * 
+ */
+void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity, int replicate) {
     // building a share table of required powers of the root of unity
     rootPowers[0][0] = 1;
     rootPowers[0][1] = rootOfUnity;
@@ -95,10 +106,12 @@ void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity) {
         rootPowers[0][p] = ring_mul(ring, rootPowers[0][p-1], rootPowers[0][1]);
     }
     for (int d = 1; d < 7; d++) {
-        rootPowers[d][0] = 1;
-        rootPowers[d][1] = ring_square(ring, rootPowers[d-1][1]);
-        for (int p = 2; p < (64 >> d); ++p) {
-            rootPowers[d][p] = ring_mul(ring, rootPowers[d][p-1], rootPowers[d][1]);
+        for (int offset = 0; offset < (replicate ? (64 / (64 >> d)) : 1); offset += 64 >> d) {
+            rootPowers[d][offset+0] = 1;
+            rootPowers[d][offset+1] = ring_square(ring, rootPowers[d-1][1]);
+            for (int p = 2; p < (64 >> d); ++p) {
+                rootPowers[d][offset+p] = ring_mul(ring, rootPowers[d][offset+p-1], rootPowers[d][1]);
+            }
         }
     }
 }
@@ -108,8 +121,8 @@ ring_t getRing(int degree) {
     ring_t ring = {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
     // first time initialization of shared tables
     if (!ringInit) {
-        initRootPowerTable(ring, ringPowers[0], ring.rootOfUnity);
-        initRootPowerTable(ring, ringInvPowers[0], ring.invRootOfUnity);
+        initRootPowerTable(ring, ringPowers[0], ring.rootOfUnity, ringInitReplicate);
+        initRootPowerTable(ring, ringInvPowers[0], ring.invRootOfUnity, ringInitReplicate);
 
         ringInit = 1;
     }; 
@@ -129,7 +142,7 @@ ring_t getRing(int degree) {
 */
 void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity) {
     int rootPowers[8][64];
-    initRootPowerTable(ring, rootPowers, rootOfUnity);
+    initRootPowerTable(ring, rootPowers, rootOfUnity, 0);
     poly_fast_ntt_transform_helper(dst, src.coeffs, ring, src.degree, 1, 0, rootPowers);
 }
 
