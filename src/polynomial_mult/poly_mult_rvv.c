@@ -229,7 +229,7 @@ const int32_t ntt_coeff_indices_64[] = {
   28, 156, 92, 220, 60, 188, 124, 252 
 };
 // NTT forward pass indices for 128 coeffs:
-const int32_t ntt_coeff_indices_128[] = {
+const uint32_t ntt_coeff_indices_128[] = {
    0, 256, 128, 384, 64, 320, 192, 448,
   32, 288, 160, 416, 96, 352, 224, 480,
   16, 272, 144, 400, 80, 336, 208, 464,
@@ -261,6 +261,12 @@ void display_vint32(TYPE_LMUL(vint32) vec, size_t vl) {
     printf("\n");
 }
 
+/** RVV-based implementation of Barrett's method for modulo reduction (modulo 3329)
+ *
+ * @param v input vector
+ * @param vl vector length (number of element modulo reduced)
+ * @return remainder
+ */
 inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
     // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
     // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
@@ -269,9 +275,13 @@ inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
     TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
     v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
     MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
+#if 0
     vec_tmp_results = FUNC_LMUL(__riscv_vmv_v_x_i32)(0, vl);
     vec_tmp_results = FUNC_LMUL(__riscv_vmerge_vxm_i32)(vec_tmp_results, -3329, cmp_mask, vl);
     v = FUNC_LMUL(__riscv_vadd_vv_i32)(v, vec_tmp_results, vl);
+#else
+    v = FUNC_LMUL_MASKED(__riscv_vadd_vx_i32)(cmp_mask, v, v, -3329, vl);
+#endif
 
     return v;
 }
@@ -296,8 +306,6 @@ typedef struct {
 void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64], ntt_params_t params) {
     const size_t coeffWidth = sizeof(coeffs[0]);
 
-    size_t vlmax = FUNC_LMUL(__riscv_vsetvlmax_e32)();
-
     assert(_n > 1);
 
     // A/B buffering for coefficients
@@ -317,14 +325,14 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     if (params._USE_INDEXED_LOAD)
     {
         size_t avl = _n; // half of n odd/even coefficients
-        int* coeffs_index = ntt_coeff_indices_128;
+        const unsigned int* coeffs_index = ntt_coeff_indices_128;
         int* dst_coeffs = dst->coeffs;
         for (size_t vl; avl > 0; avl -= vl, coeffs_index += vl, dst_coeffs += vl)
         {
             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
 
-            TYPE_LMUL(vuint32) vec_indices = FUNC_LMUL(__riscv_vle32_v_u32)((int*) coeffs_index, vl);
-            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vluxei32_v_i32)((int*) coeffs_a, vec_indices, vl);
+            TYPE_LMUL(vuint32) vec_indices = FUNC_LMUL(__riscv_vle32_v_u32)(coeffs_index, vl);
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vluxei32_v_i32)((const int*) coeffs_a, vec_indices, vl);
 
             FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, vec_coeffs, vl);
         }
@@ -599,7 +607,6 @@ void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
     vbool4_t mask_even_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_even_i8);
     vbool4_t mask_odd_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_odd_i8);
 
-
     size_t avl = dst->degree + 1;
     size_t vl = __riscv_vsetvl_e32m8(avl);
     // TODO: loop around avl
@@ -766,7 +773,6 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     // division by the degree
     rvv_ntt_degree_scaling(dst, ring);
 
-    // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
     free(ntt_lhs.coeffs);
     free(ntt_lhs_times_rhs.coeffs);
 }
