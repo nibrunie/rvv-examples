@@ -454,9 +454,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
 
-        vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x55, __riscv_vsetvlmax_e32m1());
         vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xaa, __riscv_vsetvlmax_e32m1());
-        MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
         MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
 
         // first level, no need to multiply by any twiddle factor
@@ -487,9 +485,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
 
-        vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x33, __riscv_vsetvlmax_e32m1());
         vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
-        MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
         MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
 
         // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
@@ -526,9 +522,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
 
-        vint8m1_t mask_down_i8 = __riscv_vmv_v_x_i8m1(0x0f, __riscv_vsetvlmax_e32m1());
         vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
-        MASK_TYPE_E32(vbool) mask_down_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_down_i8);
         MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
 
         // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
