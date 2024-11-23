@@ -42,7 +42,7 @@ typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, pol
 typedef struct {
     poly_mult_bench_func_t* bench;
     poly_mult_bench_result_t result;
-    char label[100];
+    char label[256];
 } poly_mult_bench_t;
 
 
