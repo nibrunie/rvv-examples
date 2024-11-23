@@ -286,6 +286,22 @@ inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
     return v;
 }
 
+static inline TYPE_LMUL(vint32) rvv_ntt_butterfly(TYPE_LMUL(vint32) vec_coeffs, int n, int modulo, TYPE_LMUL(vint32) vec_twiddleFactor, MASK_TYPE_E32(vbool) mask_up_b4, size_t vl) {
+    vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
+    
+    // swapping odd/even pairs of coefficients
+    TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
+    vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
+
+    vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
+    vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
+
+    // TODO: optimize modulo reduction
+    vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, modulo, vl);
+
+    return vec_coeffs;
+}
+
 typedef struct {
     int _USE_STRIDED_LOAD;
     int _USE_INDEXED_LOAD;
@@ -523,19 +539,9 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl)
         {
             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-
             TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
-            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-            
-            // swapping odd/even pairs of coefficients
-            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
-            vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
 
-            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
-            vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
-
-            // TODO: optimize modulo reduction
-            vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, dst->modulo, vl);
+            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, n, dst->modulo, vec_twiddleFactor, mask_up_b4, vl);
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
         n = 2 * n;
