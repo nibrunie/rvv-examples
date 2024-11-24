@@ -75,7 +75,9 @@ int main(void) {
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based"},
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based with Barrett reduction"}, 
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion indexed-load-based with Barrett reduction"}, 
+#if LMUL > 1
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_fastest_bench, .label="RVV-based ntt-based multiplication (fastest variant [hopefully]"}, 
+#endif
     };
     int moduloCoeffs[129] = {0};
     moduloCoeffs[0] = -1;
