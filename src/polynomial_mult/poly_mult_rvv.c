@@ -623,7 +623,151 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
     }
 }
 
+
 void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity);
+
+/** Compute n-element NTT, assuming level @p level
+ *  WARNING: non-indexed variant is destructive as coeffs is used as a temporary buffer and overwritten
+ *
+ * @param[out] dst destination buffer for NTT transform result
+ * @param[in] inputs coefficients (must contain @p n elements)
+ * @param n number of coefficients
+ * @param level NTT level (start from 0)
+ * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
+*/
+void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]) {
+    const size_t coeffWidth = sizeof(coeffs[0]);
+
+    assert(_n > 1);
+
+    // iteration over the local number of coefficients
+    int local_level = 6;
+    int n = _n;
+    // masks used for the odd/even split using vcompress instructions
+    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x55, __riscv_vsetvlmax_e32m1());
+    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_even_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_even_i8);
+    MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
+
+    {
+        size_t avl = _n;
+        const unsigned int* coeffs_index = ntt_coeff_indices_128;
+        int* dst_coeffs = dst->coeffs;
+        for (size_t vl; avl > 0; avl -= vl, coeffs_index += vl, dst_coeffs += vl)
+        {
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+
+            TYPE_LMUL(vuint32) vec_indices = FUNC_LMUL(__riscv_vle32_v_u32)(coeffs_index, vl);
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vluxei32_v_i32)((const int*) coeffs, vec_indices, vl);
+
+            FUNC_LMUL(__riscv_vse32_v_i32)((int*) dst_coeffs, vec_coeffs, vl);
+        }
+
+        local_level = 6;
+        n = 2;
+    }
+    // reconstruction stage input should be equal to the destination buffer
+    // (a copy was inserted to ensure this is true)
+    int* coeffs_a = dst->coeffs;
+
+    vint8m1_t mask_up_lvl6_i8 = __riscv_vmv_v_x_i8m1(0xaa, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl6_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl6_i8);
+
+    // condition under which butterfly level 4 can be optimized (required a wide enought vector register group)
+    const int cond_lvl4 = (8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
+    // mask for 4th level of butterfly (used for vslideup to swap 4-elt sub-group in 8-elt group)
+    vint8m1_t mask_up_lvl4_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl4_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl4_i8);
+    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+    // local_level is 4 (used to index rootPowers)
+    TYPE_LMUL(vint32) vec_twiddleFactor_lvl4 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[4], FUNC_LMUL(__riscv_vsetvlmax_e32)());
+
+    const int cond_lvl5 = (4 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
+    vint8m1_t mask_up_lvl5_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl5_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl5_i8);
+
+    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+    TYPE_LMUL(vint32) vec_twiddleFactor_lvl5 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[5], FUNC_LMUL(__riscv_vsetvlmax_e32)());
+
+    // optimize n=2, 4 and 8 cases  using masked vslide(up/down)
+    {
+        assert (n == 2 && local_level == 6);
+        size_t avl = _n;
+        int* coeffs_addr = coeffs_a;
+
+        // first level, no need to multiply by any twiddle factor
+        // because this level the factor is twiddleFactor^0 = 1
+        for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl)
+        {
+            vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+
+            TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
+            
+            // swapping odd/even pairs of coefficients
+            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 1, vl);
+            vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
+
+            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_lvl6_b4, vec_coeffs, vec_coeffs, vl);
+            vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
+            // Note: no modulo reduction is performed for level 6
+
+            // fusing optimization for the next level (4-elt group case)
+            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 4, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
+
+            // fusing optimization for the next level (8-elt group case)
+            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 8, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+
+            FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
+        }
+        n = 16;
+        local_level = 3;
+
+        assert(4 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=4 for level 5 must fit in vlmax for current LMUL
+        assert(8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=8 for level 4 must fit in vlmax for current LMUL
+    }
+
+    // disabling assert to allow skipping some optimization levels due to LMUL too small to fit
+    // a local element group to perform swapping 
+    for (; local_level >= 0; n = 2 * n, local_level--) {
+        const int m = 1 << local_level;
+        const int half_n = n / 2;
+
+        for (int j = 0; j < m; j++) {
+            size_t avl = half_n;
+            assert(avl <= 64); // rootPowers[level] is at most a 64-element array
+            int* even_coeffs = coeffs_a + 2 * j * half_n;
+            int* odd_coeffs = even_coeffs + half_n;
+            int* twiddleFactor = rootPowers[local_level];
+            for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
+            {
+                vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+                TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
+                TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
+
+                TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
+
+                TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
+                TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
+                vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
+
+                if (0) {
+                    vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
+                    vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
+                } else {
+                    // even results
+                    vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
+
+                    // odd results
+                    vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
+                }
+
+                FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+                FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
+            }
+        } 
+    }
+}
+
 
 void rvv_ntt_transform(ntt_t* dst, int* coeffs, ring_t ring, int degree, int rootOfUnity) {
     const int n = degree + 1;
@@ -812,6 +956,32 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     free(ntt_lhs_times_rhs.coeffs);
 }
 
+
+void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    // FIXME: ring structure should be a function argument
+    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // X^128 - 1 Ring:
+    ring_t ring = getRing(dst->degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+
+    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    // used for both right-hand-side and destination NTT
+    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+
+    rvv_ntt_transform_fastest_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
+    rvv_ntt_transform_fastest_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
+
+    // element-size multiplication using RVV
+    rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+
+    rvv_ntt_transform_fastest_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0]);
+
+    // division by the degree
+    rvv_ntt_degree_scaling(dst, ring);
+
+    free(ntt_lhs.coeffs);
+    free(ntt_lhs_times_rhs.coeffs);
+}
+
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
@@ -856,4 +1026,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, p
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_indexed, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_fastest_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_fastest, golden);
 }
