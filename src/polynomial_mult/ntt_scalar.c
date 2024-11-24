@@ -10,23 +10,37 @@ int bit_reverse(int x, int n) {
     return -1;
 }
 
-static int ring_add(ring_t ring, int lhs, int rhs) {
-    return (lhs + rhs) % ring.modulo;
+static inline int barrett_reduction_mul(int a, int b) {
+    // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
+    // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
+    // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
+    int mul = a * b;
+    int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
+    return tmp >= 3329 ? tmp - 3329 : tmp; 
 }
 
-static int ring_sub(ring_t ring, int lhs, int rhs) {
-    return (lhs - rhs) % ring.modulo;
+static inline int ring_add(ring_t ring, int lhs, int rhs) {
+    // return (lhs + rhs) % ring.modulo;
+    int sum = lhs + rhs;
+    return sum >= ring.modulo ? sum - ring.modulo : sum;
 }
 
-static int ring_mul(ring_t ring, int lhs, int rhs) {
-    return (lhs * rhs) % ring.modulo;
+static inline int ring_sub(ring_t ring, int lhs, int rhs) {
+    // return (lhs - rhs) % ring.modulo;
+    int diff = lhs - rhs;
+    return diff >= ring.modulo ? diff - ring.modulo : diff;
 }
 
-static int ring_square(ring_t ring, int src) {
+static inline int ring_mul(ring_t ring, int lhs, int rhs) {
+    // return (lhs * rhs) % ring.modulo;
+    return barrett_reduction_mul(lhs, rhs);
+}
+
+static inline int ring_square(ring_t ring, int src) {
     return ring_mul(ring, src, src);
 }
 
-static int ring_power(ring_t ring, int lhs, int n) {
+static inline int ring_power(ring_t ring, int lhs, int n) {
     assert(n >= 0);
     if (n == 0) return 1;
     else if (n == 1) return lhs;
