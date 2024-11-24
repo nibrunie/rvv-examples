@@ -36,6 +36,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_barrett_bench(polynomial_t
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_ntt_rvv_fastest_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden); 
+
 typedef poly_mult_bench_result_t (poly_mult_bench_func_t)(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 /** Descriptor structure for softmax benchmark */
@@ -73,6 +75,7 @@ int main(void) {
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based"},
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based with Barrett reduction"}, 
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion indexed-load-based with Barrett reduction"}, 
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_fastest_bench, .label="RVV-based ntt-based multiplication (fastest variant [hopefully]"}, 
     };
     int moduloCoeffs[129] = {0};
     moduloCoeffs[0] = -1;
