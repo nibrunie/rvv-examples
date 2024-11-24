@@ -308,6 +308,7 @@ typedef struct {
     int _FINAL_N;
     int _BARRETT_RED;
     int _UNROLL_STOP;
+    int _FUSED_BUTTERFLY;
 } ntt_params_t;
 
 /** Compute n-element NTT, assuming level @p level
@@ -479,54 +480,61 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         local_level--;
     }
 
+    // condition under which butterfly level 4 can be optimized (required a wide enought vector register group)
+    const int cond_lvl4 = (params._UNROLL_STOP < 4 && 8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
+    // mask for 4th level of butterfly (used for vslideup to swap 4-elt sub-group in 8-elt group)
+    vint8m1_t mask_up_lvl4_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl4_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl4_i8);
+    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+    // local_level is 4 (used to index rootPowers)
+    TYPE_LMUL(vint32) vec_twiddleFactor_lvl4 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[4], FUNC_LMUL(__riscv_vsetvlmax_e32)());
+
+     vint8m1_t mask_up_lvl5_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
+     MASK_TYPE_E32(vbool) mask_up_lvl5_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl5_i8);
+
+     // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+     TYPE_LMUL(vint32) vec_twiddleFactor_lvl5 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
+
     // optimize n=4 case (vslide(up/down) which 0x33 and 0xcc masks)
     if (params._UNROLL_STOP < 5) {
         assert (n == 4 && local_level == 5);
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
 
-        vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
-        MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
-
-        // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
-        TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
-
         for (size_t vl; avl > 0; avl -= vl, coeffs_addr += vl)
         {
             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
 
             TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
-            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-            
-            // swapping odd/even pairs of coefficients
-            // using 2 up or 2 down slides
-            assert(n / 2 == 2);
-            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
-            vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
 
-            vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
-            vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
+            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, n, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
 
-            // TODO: optimize modulo reduction
-            vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, dst->modulo, vl);
+            if (params._FUSED_BUTTERFLY && cond_lvl4) {
+                // fusing optimization for the next level (8-elt group case)
+                vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 2 * n, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+            }
+
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
         n = 2 * n;
         local_level--;
+
+        if (params._FUSED_BUTTERFLY && cond_lvl4) {
+            assert(n == 8 && local_level == 4);
+            assert(n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n must fit in vlmax for current LMUL
+            // extra level fused
+            n = 2 * n;
+            local_level--;
+        }
     }
 
+
     // optimize n=8 case (vslide(up/down) which 0x0f and 0xf0 masks)
-    if (params._UNROLL_STOP < 4 && n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()) {
+    if (!params._FUSED_BUTTERFLY && cond_lvl4) {
         assert (n == 8 && local_level == 4);
         assert(n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n must fit in vlmax for current LMUL
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
-
-        vint8m1_t mask_up_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
-        MASK_TYPE_E32(vbool) mask_up_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_i8);
-
-        // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
-        TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
 
         avl = _n;
 
@@ -535,7 +543,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
             TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
 
-            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, n, dst->modulo, vec_twiddleFactor, mask_up_b4, vl);
+            vec_coeffs = rvv_ntt_butterfly(vec_coeffs, n, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
         n = 2 * n;
@@ -778,27 +786,27 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 }
 
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
+    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
 }
 
 void poly_mult_ntt_rvv_compressed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
 void poly_mult_ntt_rvv_indexed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6};
+    ntt_params_t params_indexed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_indexed);
 }
 
 void poly_mult_ntt_rvv_compressed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3, ._FUSED_BUTTERFLY = 1};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
 void poly_mult_ntt_rvv_indexed_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3};
+    ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 1, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 3, ._FUSED_BUTTERFLY = 1};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
 }
 
