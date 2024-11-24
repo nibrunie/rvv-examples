@@ -267,7 +267,7 @@ void display_vint32(TYPE_LMUL(vint32) vec, size_t vl) {
  * @param vl vector length (number of element modulo reduced)
  * @return remainder
  */
-inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
+static inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_t vl) {
     // int mul = (lhs.coeffs[d] * rhs.coeffs[d]);
     // int tmp = mul - ((((int64_t) mul * 5039LL) >> 24)) * 3329;
     // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
@@ -355,6 +355,7 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
         }
 
         local_level = 6;
+        n = 2;
 
     } else {
         // initial stage(s) of the explicit coefficient permutations
@@ -435,18 +436,33 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
                 }
             }
         } else {
-        if (coeffs_a != dst->coeffs) {
-            // copying the result back to the destination
-            memcpy(dst->coeffs, coeffs_a, _n * sizeof(int));
-            // TODO: this can certainly be optimized by having different source/destination pointers
-            //       for the first local level of the next loop if the buffer differs
+            if (coeffs_a != dst->coeffs) {
+                // copying the result back to the destination
+                memcpy(dst->coeffs, coeffs_a, _n * sizeof(int));
+                // TODO: this can certainly be optimized by having different source/destination pointers
+                //       for the first local level of the next loop if the buffer differs
+            }
         }
-    }
-
     }
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
     coeffs_a = dst->coeffs;
+
+    // condition under which butterfly level 4 can be optimized (required a wide enought vector register group)
+    const int cond_lvl4 = (params._UNROLL_STOP < 4 && 8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
+    // mask for 4th level of butterfly (used for vslideup to swap 4-elt sub-group in 8-elt group)
+    vint8m1_t mask_up_lvl4_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl4_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl4_i8);
+    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+    // local_level is 4 (used to index rootPowers)
+    TYPE_LMUL(vint32) vec_twiddleFactor_lvl4 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[4], FUNC_LMUL(__riscv_vsetvlmax_e32)());
+
+    const int cond_lvl5 = (params._UNROLL_STOP < 5 && 4 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
+    vint8m1_t mask_up_lvl5_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_up_lvl5_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl5_i8);
+
+    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
+    TYPE_LMUL(vint32) vec_twiddleFactor_lvl5 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[5], FUNC_LMUL(__riscv_vsetvlmax_e32)());
 
     assert(n == 2);
     // optimize n=2 case (vslide(up/down) which 0x55 and 0xAA masks)
@@ -473,30 +489,41 @@ void rvv_ntt_transform_fast_helper(ntt_t* dst, int* coeffs, int _n, int level, i
             vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
             vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
 
+            if (params._FUSED_BUTTERFLY && cond_lvl5) {
+                // fusing optimization for the next level (4-elt group case)
+                vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 2 * n, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
+            }
+
+            if (params._FUSED_BUTTERFLY && cond_lvl4) {
+                // fusing optimization for the next level (8-elt group case)
+                vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 4 * n, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+            }
+
             // Note: no modulo reduction is performed
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
         n = 2 * n;
         local_level--;
+
+        if (params._FUSED_BUTTERFLY && cond_lvl5) {
+            assert(n == 4 && local_level == 5);
+            assert(n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n must fit in vlmax for current LMUL
+            // extra level fused
+            n = 2 * n;
+            local_level--;
+        }
+
+        if (params._FUSED_BUTTERFLY && cond_lvl4) {
+            assert(n == 8 && local_level == 4);
+            assert(n <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n must fit in vlmax for current LMUL
+            // extra level fused
+            n = 2 * n;
+            local_level--;
+        }
     }
 
-    // condition under which butterfly level 4 can be optimized (required a wide enought vector register group)
-    const int cond_lvl4 = (params._UNROLL_STOP < 4 && 8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)());
-    // mask for 4th level of butterfly (used for vslideup to swap 4-elt sub-group in 8-elt group)
-    vint8m1_t mask_up_lvl4_i8 = __riscv_vmv_v_x_i8m1(0xf0, __riscv_vsetvlmax_e32m1());
-    MASK_TYPE_E32(vbool) mask_up_lvl4_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl4_i8);
-    // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
-    // local_level is 4 (used to index rootPowers)
-    TYPE_LMUL(vint32) vec_twiddleFactor_lvl4 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[4], FUNC_LMUL(__riscv_vsetvlmax_e32)());
-
-     vint8m1_t mask_up_lvl5_i8 = __riscv_vmv_v_x_i8m1(0xcc, __riscv_vsetvlmax_e32m1());
-     MASK_TYPE_E32(vbool) mask_up_lvl5_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_up_lvl5_i8);
-
-     // expect rootPowers built with replicate parameter set so the 2-element pattern is repeated across the vector register group
-     TYPE_LMUL(vint32) vec_twiddleFactor_lvl5 = FUNC_LMUL(__riscv_vle32_v_i32)((int32_t*) rootPowers[local_level], FUNC_LMUL(__riscv_vsetvlmax_e32)());
-
     // optimize n=4 case (vslide(up/down) which 0x33 and 0xcc masks)
-    if (params._UNROLL_STOP < 5) {
+    if (!params._FUSED_BUTTERFLY && cond_lvl5) {
         assert (n == 4 && local_level == 5);
         size_t avl = _n;
         int* coeffs_addr = coeffs_a;
