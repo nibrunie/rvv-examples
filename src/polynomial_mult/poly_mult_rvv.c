@@ -297,7 +297,11 @@ static inline TYPE_LMUL(vint32) rvv_ntt_butterfly(TYPE_LMUL(vint32) vec_coeffs, 
     vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
 
     // TODO: optimize modulo reduction
+#if 0
     vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, modulo, vl);
+#else
+    vec_coeffs = rvv_barrett_reduction(vec_coeffs, vl);
+#endif
 
     return vec_coeffs;
 }
@@ -750,7 +754,7 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
                 TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
                 vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
 
-                if (0) {
+                if (1) {
                     vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
                     vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
                 } else {
