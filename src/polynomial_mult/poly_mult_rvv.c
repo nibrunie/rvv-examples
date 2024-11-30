@@ -820,18 +820,21 @@ void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     for (size_t vl; avl > 0; avl -= vl, lhs_coeffs += vl, rhs_coeffs += vl, dst_coeffs += vl)
     {
         // compute loop body vector length from avl (application vector length)
-        vl = __riscv_vsetvl_e32m8(avl);
+        vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
         // loading operands
-        vint32m8_t vec_src_lhs = __riscv_vle32_v_i32m8(lhs_coeffs, vl);
-        vint32m8_t vec_src_rhs = __riscv_vle32_v_i32m8(rhs_coeffs, vl);
+        TYPE_LMUL(vint32) vec_src_lhs = FUNC_LMUL(__riscv_vle32_v_i32)(lhs_coeffs, vl);
+        TYPE_LMUL(vint32) vec_src_rhs = FUNC_LMUL(__riscv_vle32_v_i32)(rhs_coeffs, vl);
         // modulo multiplication (eventually we will want to consider other techniques
         // than a naive remainder; e.g. Barret's reduction algorithm using a pre-computed
         // factor from the static modulo).
-        vint32m8_t vec_acc = __riscv_vmul_vv_i32m8(vec_src_lhs, vec_src_rhs, vl);
-        // TODO: consider using a vectorized version of Barret's reduction algorithm
-        vec_acc = __riscv_vrem_vx_i32m8(vec_acc, dst->modulo, vl);
+        TYPE_LMUL(vint32) vec_acc = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_src_lhs, vec_src_rhs, vl);
+#       if 0   
+        vec_acc = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_acc, dst->modulo, vl);
+#      else
+        vec_acc = rvv_barrett_reduction(vec_acc, vl);
+#      endif
         // storing results
-        __riscv_vse32_v_i32m8(dst_coeffs, vec_acc, vl);
+        FUNC_LMUL(__riscv_vse32_v_i32)(dst_coeffs, vec_acc, vl);
     }
 }
 
