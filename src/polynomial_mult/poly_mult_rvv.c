@@ -842,17 +842,21 @@ void rvv_ntt_degree_scaling(ntt_t* dst, ring_t ring) {
     for (size_t vl; avl > 0; avl -= vl, dst_coeffs += vl)
     {
         // compute loop body vector length from avl (application vector length)
-        vl = __riscv_vsetvl_e32m8(avl);
+        vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
         // loading operands
-        vint32m8_t vec = __riscv_vle32_v_i32m8(dst_coeffs, vl);
+        TYPE_LMUL(vint32) vec = FUNC_LMUL(__riscv_vle32_v_i32)(dst_coeffs, vl);
         // modulo multiplication (eventually we will want to consider other techniques
         // than a naive remainder; e.g. Barret's reduction algorithm using a pre-computed
         // factor from the static modulo).
-        vec = __riscv_vmul_vx_i32m8(vec, ring.invDegree, vl);
+        vec = FUNC_LMUL(__riscv_vmul_vx_i32)(vec, ring.invDegree, vl);
         // modulo reduction
-        vec = __riscv_vrem_vx_i32m8(vec, ring.modulo, vl);
+#       if 0   
+        vec = FUNC_LMUL(__riscv_vrem_vx_i32)(vec, ring.modulo, vl);
+#      else
+        vec = rvv_barrett_reduction(vec, vl);
+#      endif
         // storing results
-        __riscv_vse32_v_i32m8(dst_coeffs, vec, vl);
+        FUNC_LMUL(__riscv_vse32_v_i32)(dst_coeffs, vec, vl);
     }
 }
 
