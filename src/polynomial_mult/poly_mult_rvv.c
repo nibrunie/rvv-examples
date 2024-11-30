@@ -887,7 +887,7 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_bench(polynomial_t* dst, polynomial_t
 }
 
 
-void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
     // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
     // X^128 - 1 Ring:
@@ -924,8 +924,8 @@ void poly_mult_ntt_rvv_v2(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 }
 
 /** Benchmark wrapper */
-poly_mult_bench_result_t poly_mult_ntt_rvv_v2_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
-    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_v2, golden);
+poly_mult_bench_result_t poly_mult_ntt_rvv_recursive_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_recursive, golden);
 }
 
 
