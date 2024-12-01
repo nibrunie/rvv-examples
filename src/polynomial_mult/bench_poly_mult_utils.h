@@ -48,11 +48,22 @@ static void randomize_poly(polynomial_t dst) {
   for (k = 0; k <= dst.degree; ++k) dst.coeffs[k] = rand() % dst.modulo;
 }
 
+
+// Depending on the method used to compute the remainder, the result might be positive or negative
+// (always less than 3329 in absolute value). By adding 3329, we ensure that the result is always
+// positive after the modulo operation, thus removing false negative in comparison
+static int fix_modulo(int x, int modulo) {
+  return x >= 0 ? x :  (x + modulo);
+}
+
 static int compare_poly(polynomial_t lhs, polynomial_t rhs) {
   if (lhs.degree != rhs.degree) return -1;
   int k;
   for (k = 0; k <= lhs.degree; ++k) {
-    if (lhs.coeffs[k] != rhs.coeffs[k]) return -(k+1); // non-zero error code
+    if (fix_modulo(lhs.coeffs[k], 3329) != fix_modulo(rhs.coeffs[k], 3329)) {
+      printf("lhs.coeffs[%d] = %d, rhs.coeffs[%d] = %d\n", k, lhs.coeffs[k], k, rhs.coeffs[k]);
+      return -(k+1); // non-zero error code
+    }
   };
   return 0; // success
 }
