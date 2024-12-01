@@ -814,7 +814,7 @@ void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
 void rvv_ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs) {
     assert(dst->degree >= lhs.degree && dst->degree >= rhs.degree);
 
-    size_t avl = dst->degree + 1;
+    size_t avl = lhs.degree + 1;
     int* lhs_coeffs = lhs.coeffs;
     int* rhs_coeffs = rhs.coeffs;
     int* dst_coeffs = dst->coeffs;
@@ -905,7 +905,7 @@ void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial
 
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     // used for both right-hand-side and destination NTT
-    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+    ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
 
     if (USE_PRECOMPUTED_ROOT_POWERS) {
         // using pre-computed root powers
@@ -921,11 +921,12 @@ void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial
 
     if (1) {
         // using pre-computed inverse root powers
-        rvv_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0]);
+        rvv_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
     } else {
         rvv_ntt_transform(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, ring.invRootOfUnity);
     }
     // division by the degree
+    dst->degree = lhs.degree;
     rvv_ntt_degree_scaling(dst, ring);
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
@@ -947,7 +948,7 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
 
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     // used for both right-hand-side and destination NTT
-    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+    ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
 
     rvv_ntt_transform_fast_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0], params);
     rvv_ntt_transform_fast_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0], params);
@@ -955,9 +956,10 @@ void poly_mult_ntt_rvv_v3(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs,
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    rvv_ntt_transform_fast_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0], params);
+    rvv_ntt_transform_fast_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0], params);
 
     // division by the degree
+    dst->degree = lhs.degree;
     rvv_ntt_degree_scaling(dst, ring);
 
     free(ntt_lhs.coeffs);
@@ -973,7 +975,7 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
 
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     // used for both right-hand-side and destination NTT
-    ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
+    ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
 
     rvv_ntt_transform_fastest_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
     rvv_ntt_transform_fastest_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
@@ -981,9 +983,10 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    rvv_ntt_transform_fastest_helper(dst, ntt_lhs_times_rhs.coeffs, dst->degree + 1, 0, ringInvPowers[0]);
+    rvv_ntt_transform_fastest_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
 
     // division by the degree
+    dst->degree = lhs.degree;
     rvv_ntt_degree_scaling(dst, ring);
 
     free(ntt_lhs.coeffs);
