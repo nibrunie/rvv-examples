@@ -248,7 +248,7 @@ void poly_mult_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polyno
     // FIXME: ring structure should be a function argument
     // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
     // X^128 - 1 Ring:
-    ring_t ring = getRing(dst->degree); //{.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+    ring_t ring = getRing(lhs.degree); //{.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     ntt_t ntt_rhs = allocate_poly(rhs.degree, 3329);
     ntt_t ntt_lhs_times_rhs = allocate_poly(dst->degree, 3329); 
@@ -270,7 +270,7 @@ void poly_mult_fast_ntt(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, p
     // FIXME: ring structure should be a function argument
     // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
     // X^128 - 1 Ring:
-    ring_t ring = getRing(dst->degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+    ring_t ring = getRing(lhs.degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
 
     ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
     // used for both right-hand-side and destination NTT
