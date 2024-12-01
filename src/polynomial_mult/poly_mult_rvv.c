@@ -17,59 +17,6 @@ void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring);
 void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][64]);
 void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs); 
 
-/** reinterpret cast help: reinterpreting to a different element size AND signedness */
-static inline vint32m8_t __riscv_vreinterpret_v_u64m8_i32m8(vuint64m8_t vec) {
-    vuint32m8_t vec_u32m8 = __riscv_vreinterpret_v_u64m8_u32m8(vec);
-    return __riscv_vreinterpret_v_u32m8_i32m8(vec_u32m8);
-}
-
-/** Emulation of vwsll (when intrinsics is not defined) */
-static inline vuint64m8_t __riscv_vwsll_vx_u64m8(vuint32m4_t vec, int amt, size_t vl) {
-   return __riscv_vsll_vx_u64m8(__riscv_vzext_vf2_u64m8(vec, vl), amt, vl); 
-}
-
-void rvv_ntt_last_stage(ntt_t* dst, int* coeffs, int stride) {
-    size_t avl = (dst->degree + 1) / 2;
-    int* dst_coeffs = dst->coeffs;
-
-    for (size_t vl; avl > 0; avl -= vl, coeffs += vl, dst_coeffs += 2*vl)
-    {
-        // compute loop body vector length from avl (application vector length)
-        vl = __riscv_vsetvl_e32m4(avl);
-
-        // loading even coefficients
-        vuint32m4_t vec_even_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs, vl);
-        // duplicating expansion
-        vint32m8_t vec_lhs = __riscv_vreinterpret_v_u64m8_i32m8(
-            __riscv_vor_vv_u64m8(
-                __riscv_vzext_vf2_u64m8(vec_even_coeffs, vl),
-                __riscv_vwsll_vx_u64m8(vec_even_coeffs, 32, vl),
-                vl
-            )
-        );
-        // loading odd coefficients
-        vuint32m4_t vec_odd_coeffs = __riscv_vle32_v_u32m4((unsigned int*) coeffs + stride, vl);
-        // duplicating expansion
-        vint32m8_t vec_rhs = __riscv_vreinterpret_v_u64m8_i32m8(
-            __riscv_vor_vv_u64m8(
-                __riscv_vzext_vf2_u64m8(vec_odd_coeffs, vl),
-                __riscv_vwsll_vx_u64m8(
-                    __riscv_vreinterpret_v_i32m4_u32m4(
-                        __riscv_vneg_v_i32m4(__riscv_vreinterpret_v_u32m4_i32m4(vec_odd_coeffs), vl)
-                    ), 32, vl),
-                vl
-            )
-        );
-        vint32m8_t vec_rec = __riscv_vadd_vv_i32m8(
-            vec_lhs,
-            vec_rhs,
-            vl*2); // FIXME: need cast to 32-bit
-
-        // storing results
-        __riscv_vse32_v_i32m8(dst_coeffs, vec_rec, 2*vl);
-    }
-}
-
 
 /** Compute n-element NTT, assuming level @p level
  *
@@ -775,31 +722,6 @@ void rvv_ntt_transform(ntt_t* dst, int* coeffs, ring_t ring, int degree, int roo
     initRootPowerTable(ring, rootPowers, rootOfUnity);
 
     rvv_ntt_transform_helper(dst, coeffs, n, 0, rootPowers);
-}
-
-void rvv_ntt_permute_inputs(ntt_t* dst, int* coeffs, int level) {
-    // 2^level coefficients
-    vint8m1_t mask_even_i8 = __riscv_vmv_v_x_i8m1(0x55, 16);
-    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, 16);
-    // mask type is bool<n> where n in EEW / EMUL (in our case 32 / 8 = 4)
-    vbool4_t mask_even_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_even_i8);
-    vbool4_t mask_odd_b4 = __riscv_vreinterpret_v_i8m1_b4(mask_odd_i8);
-
-    size_t avl = dst->degree + 1;
-    size_t vl = __riscv_vsetvl_e32m8(avl);
-    // TODO: loop around avl
-    if (1) {
-        // method 1: unit-strided load + vcompress
-        // extracting even coefficients
-        vuint32m8_t vec_even_coeffs = __riscv_vle32_v_u32m8((unsigned int*) coeffs, vl);
-        vec_even_coeffs = __riscv_vcompress_vm_u32m8(vec_even_coeffs, mask_even_b4, vl);
-        vuint32m8_t vec_odd_coeffs = __riscv_vle32_v_u32m8((unsigned int*) coeffs, vl);
-        vec_odd_coeffs = __riscv_vcompress_vm_u32m8(vec_odd_coeffs, mask_odd_b4, vl);
-    } else {
-        // method 2: strided load
-        vuint32m8_t vec_even_coeffs = __riscv_vlse32_v_u32m8((unsigned int*) coeffs, sizeof(coeffs[0]), vl);
-        vuint32m8_t vec_odd_coeffs = __riscv_vlse32_v_u32m8((unsigned int*) (coeffs + 1), sizeof(coeffs[0]), vl);
-    }
 }
 
 
