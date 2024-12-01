@@ -882,7 +882,9 @@ void poly_mult_ntt_rvv(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, po
 
     poly_fast_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, 1, 0, ringInvPowers[0]);
     // division by the degree
+    dst->degree = lhs.degree;
     rvv_ntt_degree_scaling(dst, ring);
+
 
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
     free(ntt_lhs.coeffs);
