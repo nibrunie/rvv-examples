@@ -920,6 +920,11 @@ void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
 }
 
+void poly_mult_ntt_rvv_strided_barrett(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 1, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
+    poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
+}
+
 void poly_mult_ntt_rvv_compressed(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     ntt_params_t params_compressed = {._USE_STRIDED_LOAD = 0, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_compressed);
@@ -943,6 +948,10 @@ void poly_mult_ntt_rvv_indexed_barrett(polynomial_t* dst, polynomial_t lhs, poly
 /** Benchmark wrapper */
 poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_strided, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_strided_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_strided_barrett, golden);
 }
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
