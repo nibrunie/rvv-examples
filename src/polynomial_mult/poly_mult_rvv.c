@@ -611,6 +611,8 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         local_level = 6;
         n = 2;
     }
+
+    return;
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
     int* coeffs_a = dst->coeffs;
