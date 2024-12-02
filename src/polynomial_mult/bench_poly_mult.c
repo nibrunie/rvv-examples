@@ -28,6 +28,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_recursive_bench(polynomial_t* dst, po
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
+poly_mult_bench_result_t poly_mult_ntt_rvv_strided_barrett_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden); 
+
 poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_compressed_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden);
@@ -65,16 +67,17 @@ void poly_dump(polynomial_t poly)
 int main(void) {
     int i;
     poly_mult_bench_t benchmarks[] = {
-        (poly_mult_bench_t){.bench = poly_mult_mod_baseline_bench,       .label="baseline polynomial multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_bench,                .label="slow ntt-based multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_fast_ntt_bench,           .label="fast ntt-based multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_bench,            .label="RVV-based ntt-based multiplication"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_recursive_bench,  .label="RVV-based ntt-based multiplication recursive"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_bench,    .label="RVV-based ntt-based multiplication split-loops no-recursion indexed-load"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_strided_bench,    .label="RVV-based ntt-based multiplication split-loops no-recursion strided-load"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based"},
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion vcompress-based with Barrett reduction"}, 
-        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_barrett_bench, .label="RVV-based ntt-based multiplication split-loops no-recursion indexed-load-based with Barrett reduction"}, 
+        (poly_mult_bench_t){.bench = poly_mult_mod_baseline_bench,               .label="baseline polynomial multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_bench,                        .label="slow NTT multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_fast_ntt_bench,                   .label="fast NTT multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_bench,                    .label="RVV NTT multiplication"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_recursive_bench,          .label="RVV NTT multiplication recursive"},
+        // (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_bench,            .label="RVV NTT multiplication split-loops no-recursion indexed-load"},
+        // (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_strided_bench,            .label="RVV NTT multiplication split-loops no-recursion strided-load"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_strided_barrett_bench,    .label="RVV NTT multiplication split-loops no-recursion strided-load with Barrett reduction"},
+        // (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_bench,         .label="RVV NTT multiplication split-loops no-recursion vcompress-based"},
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_compressed_barrett_bench, .label="RVV NTT multiplication split-loops no-recursion vcompress-based with Barrett reduction"}, 
+        (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_indexed_barrett_bench,    .label="RVV NTT multiplication split-loops no-recursion indexed-load-based with Barrett reduction"}, 
 #if LMUL > 1
         (poly_mult_bench_t){.bench = poly_mult_ntt_rvv_fastest_bench, .label="RVV-based ntt-based multiplication (fastest variant [hopefully]"}, 
 #endif
