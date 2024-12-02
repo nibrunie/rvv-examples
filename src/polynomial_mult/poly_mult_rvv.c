@@ -220,16 +220,11 @@ static inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_
     // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
     // v is the result of a multiplication between two coefficients (each up to 13-bit wide)
     // so 64-bit dynamic is required when multiplying it with 5039 (13-bit unsigned)
-#if 0
     WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
     TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
     v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
     MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
     v = FUNC_LMUL_MASKED(__riscv_vadd_vx_i32)(cmp_mask, v, v, -3329, vl);
-#else
-
-    v = FUNC_LMUL(__riscv_vrem_vx_i32)(v, 3329, vl);
-#endif
 
     return v;
 }
