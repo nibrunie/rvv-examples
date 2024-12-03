@@ -7,15 +7,13 @@
 
 #include <bench_poly_mult_utils.h>
 
-// function defined in ntt_scala.c
+// structures and functions defined in ntt_scala.c
 extern int ringPowers[1][8][64];
 extern int ringInvPowers[1][8][64];
 
 ring_t getRing(int degree);
-void poly_fast_ntt_transform(ntt_t* dst, polynomial_t src, ring_t ring, int rootOfUnity);
-void poly_fast_inv_ntt_tranform(polynomial_t* dst, ntt_t src, ring_t ring); 
+
 void poly_fast_ntt_transform_helper(ntt_t* dst, int* coeffs, ring_t ring, int degree, int stride, int level, int rootPowers[8][64]);
-void ntt_mul(ntt_t* dst, ntt_t lhs, ntt_t rhs); 
 
 
 /** Compute n-element NTT, assuming level @p level
@@ -57,7 +55,6 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
     ntt_t dst_even = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = dst->coeffs, .coeffSize = (n/2)};
     ntt_t dst_odd = {.degree = (n / 2 - 1), .modulo = dst->modulo, coeffs = (dst->coeffs + n / 2), .coeffSize = (n/2)};
     rvv_ntt_transform_helper(&dst_even, ntt_even.coeffs, n / 2, level + 1, rootPowers);
-    rvv_ntt_transform_helper(&dst_odd, ntt_odd.coeffs, n / 2, level + 1, rootPowers);
 
     free(ntt_even.coeffs);
     free(ntt_odd.coeffs);
@@ -239,8 +236,7 @@ static inline TYPE_LMUL(vint32) rvv_ntt_butterfly(TYPE_LMUL(vint32) vec_coeffs, 
     vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
     vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
 
-    // TODO: optimize modulo reduction
-#if 0
+#ifdef USE_VREM_MODULO
     vec_coeffs = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_coeffs, modulo, vl);
 #else
     vec_coeffs = rvv_barrett_reduction(vec_coeffs, vl);
@@ -612,7 +608,6 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         n = 2;
     }
 
-    return;
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
     int* coeffs_a = dst->coeffs;
@@ -815,11 +810,6 @@ void poly_mult_ntt_rvv(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, po
     free(ntt_lhs_times_rhs.coeffs);
 }
 
-/** Benchmark wrapper */
-poly_mult_bench_result_t poly_mult_ntt_rvv_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
-    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv, golden);
-}
-
 
 void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
@@ -843,12 +833,14 @@ void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    if (1) {
+    if (USE_PRECOMPUTED_ROOT_POWERS) {
         // using pre-computed inverse root powers
         rvv_ntt_transform_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
     } else {
+        // without using the pre-computed inverse root powers
         rvv_ntt_transform(dst, ntt_lhs_times_rhs.coeffs, ring, ntt_lhs_times_rhs.degree, ring.invRootOfUnity);
     }
+    
     // division by the degree
     dst->degree = lhs.degree;
     rvv_ntt_degree_scaling(dst, ring);
@@ -856,11 +848,6 @@ void poly_mult_ntt_rvv_recursive(polynomial_t* dst, polynomial_t lhs, polynomial
     // FIXME: ntt_rhs and ntt_lhs's coeffs array should be statically allocated
     free(ntt_lhs.coeffs);
     free(ntt_lhs_times_rhs.coeffs);
-}
-
-/** Benchmark wrapper */
-poly_mult_bench_result_t poly_mult_ntt_rvv_recursive_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
-    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_recursive, golden);
 }
 
 
@@ -948,6 +935,14 @@ void poly_mult_ntt_rvv_indexed_barrett(polynomial_t* dst, polynomial_t lhs, poly
 }
 
 /** Benchmark wrapper */
+poly_mult_bench_result_t poly_mult_ntt_rvv_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_recursive_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_recursive, golden);
+}
+
 poly_mult_bench_result_t poly_mult_ntt_rvv_strided_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_strided, golden);
 }
