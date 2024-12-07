@@ -37,6 +37,10 @@ $(BUILD_DIR)/poly_mult_rvv.o: poly_mult_rvv.c
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
+$(BUILD_DIR)/poly_mult_rvv_asm.o: poly_mult_rvv_asm.S
+	mkdir -p $(BUILD_DIR)
+	$(RISCVCLANG) $(EXTRA_CFLAGS)  -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+
 $(BUILD_DIR)/ntt_scalar.o: ntt_scalar.c
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
@@ -45,7 +49,7 @@ $(BUILD_DIR)/poly_mult_ntt.o: poly_mult_ntt.c
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
-$(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
+$(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/poly_mult_rvv_asm.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 

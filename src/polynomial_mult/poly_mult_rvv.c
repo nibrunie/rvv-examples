@@ -904,6 +904,35 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
     free(ntt_lhs_times_rhs.coeffs);
 }
 
+// defined in poly_mult_rvv_asm.S
+extern void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
+
+void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    // FIXME: ring structure should be a function argument
+    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
+    // X^128 - 1 Ring:
+    ring_t ring = getRing(lhs.degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+
+    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    // used for both right-hand-side and destination NTT
+    ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
+
+    rvv_ntt_transform_asm_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
+    rvv_ntt_transform_asm_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
+
+    // element-size multiplication using RVV
+    rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+
+    rvv_ntt_transform_asm_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
+
+    // division by the degree
+    dst->degree = lhs.degree;
+    rvv_ntt_degree_scaling(dst, ring);
+
+    free(ntt_lhs.coeffs);
+    free(ntt_lhs_times_rhs.coeffs);
+}
+
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
@@ -969,4 +998,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, poly
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_fastest_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_fastest, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_asm_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_asm, golden);
 }
