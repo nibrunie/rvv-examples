@@ -117,10 +117,7 @@ int main(void) {
             benchmarks[benchId].result.perf_count = 0;
         }
 
-        int j;
-
-        for (j = 0; j < NUM_TESTS; ++j) {
-
+        for (int j = 0; j < NUM_TESTS; ++j) {
             // softmax benchmarks. iterating over all existing implementation for this given input set
             for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(ubench_t); benchId++)
             {
@@ -128,11 +125,8 @@ int main(void) {
                 printf("running method: %s\n", benchmarks[benchId].label);
 #               endif // VERY_VERBOSE
 
-
                 ubench_result_t local_result = benchmarks[benchId].bench(n);
-
                 benchmarks[benchId].result = accumulate_ubench_result(benchmarks[benchId].result, local_result);
-
             }
         }
 
@@ -159,9 +153,7 @@ int main(void) {
                    bench_result.errors);
 #           endif
         }
-
     }
-
 
     return 0;
 }
