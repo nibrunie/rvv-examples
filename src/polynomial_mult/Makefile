@@ -35,7 +35,7 @@ $(BUILD_DIR)/poly_mult_baseline.o: poly_mult_baseline.c
 
 $(BUILD_DIR)/poly_mult_rvv.o: poly_mult_rvv.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/poly_mult_rvv_asm.o: poly_mult_rvv_asm.S
 	mkdir -p $(BUILD_DIR)

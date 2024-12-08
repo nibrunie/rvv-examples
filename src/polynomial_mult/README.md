@@ -18,26 +18,26 @@ be `src/polynomial_mult` and execute a simple `make` command to build and run th
 
 ```
 make clean
-make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE"
+make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -O3 -DNDEBUG"
 ```
 
 It is possible to modify the build configuration with the `EXTRA_CFLAGS` environment variable,
 for example to count cycles rather than retired instructions you can run:
 ```
 make clean
-make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -DCOUNT_CYCLE"
+make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -O3 -DNDEBUG -DCOUNT_CYCLE"
 ```
 
 You can also reduce the verbosity level by removing `-DVERBOSE` and you can change the number of tests executed for each benchmark wit `-DNUM_TESTS=<num-of-tests>`.
 
-# How to build and execute exponential  accuracy benchmarks
+# How to build and execute basic polynomial test
 
-This directory contains an accuracy test bench for various scalar implementation of the exponential function.
+This directory contains a basic test evaluating a few functions performing polynomial arithmetic.
 
 Once inside a proper build/execution environment, you can change the current directory to
-be `src/softmax` and execute a simple `make` command to build and run the examples:
+be `src/polynomial_mult` and execute a simple `make` command to build and run the examples:
 
 ```
 make clean
-make sim_bench_exp 
+make sim_basic_poly_test 
 ```
