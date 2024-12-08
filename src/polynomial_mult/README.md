@@ -1,4 +1,4 @@
-# Softmax
+# Polynomial Multiplication
 
 The examples in this directory implement multiple versions of polynomial multiplication.
 Those examples are designed to illustrate multiple ways RISC-V Vector Extension (RVV) can
@@ -28,16 +28,5 @@ make clean
 make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -DCOUNT_CYCLE"
 ```
 
-You can also reduce the verbosity level by removing `-DVERBOSE` and you can change the number of tests executed for each benchmark wit `-DNUM_TESTS=<num-of-tests>`.
-
-# How to build and execute exponential  accuracy benchmarks
-
-This directory contains an accuracy test bench for various scalar implementation of the exponential function.
-
-Once inside a proper build/execution environment, you can change the current directory to
-be `src/softmax` and execute a simple `make` command to build and run the examples:
-
-```
-make clean
-make sim_bench_exp 
-```
+You can also reduce the verbosity level by removing `-DVERBOSE` and 
+you can change the number of tests executed for each benchmark with `-DNUM_TESTS=<num-of-tests>`.
