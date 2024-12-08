@@ -26,32 +26,34 @@ SIM_ARCH=rv64gcv_zvbb
 SIMULATOR=spike --isa=$(SIM_ARCH)_zicntr_zihpm --varch=vlen:$(VLEN),elen:64 $(PK_PATH)
 # SIMULATOR=qemu-riscv64 -cpu rv64,v=on,vext_spec=v1.0,vlen=128,rvv_ta_all_1s=on
 
+COMMON_INCLUDES = -I./ -I../utils/
+
 INCLUDE_DIR ?= /opt/riscv/riscv64-unknown-elf/include/
 BUILD_DIR ?= $(PWD)/build/
 
 $(BUILD_DIR)/poly_mult_baseline.o: poly_mult_baseline.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/poly_mult_rvv.o: poly_mult_rvv.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/ntt_scalar.o: ntt_scalar.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/poly_mult_ntt.o: poly_mult_ntt.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=rv64gcv $^ -lm -o $@
 
 $(BUILD_DIR)/basic_poly_test: basic_poly_test.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/ntt_scalar.o
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=rv64gcv $^ -lm -o $@
 
 sim_bench_poly_mult: $(BUILD_DIR)/bench_poly_mult
 	$(SIMULATOR) $^

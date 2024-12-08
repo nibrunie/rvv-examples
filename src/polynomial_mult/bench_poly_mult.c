@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <assert.h>
 #include <bench_poly_mult_utils.h>
 
