@@ -9,7 +9,7 @@ RISCVCLANG=clang  --target=riscv64
 RISCVCC=riscv64-unknown-elf-gcc 
 OBJDUMP=riscv64-unknown-elf-objdump
 
-EXTRA_CFLAGS?=-DCOUNT_INSTRET
+EXTRA_CFLAGS?=-DCOUNT_INSTRET -O2
 
 # architectural parameters for the simulation
 # width of vector registers (VLEN)
@@ -31,27 +31,27 @@ BUILD_DIR ?= $(PWD)/build/
 
 $(BUILD_DIR)/poly_mult_baseline.o: poly_mult_baseline.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/poly_mult_rvv.o: poly_mult_rvv.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/ntt_scalar.o: ntt_scalar.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/poly_mult_ntt.o: poly_mult_ntt.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -march=rv64gcv $^ -lm -o $@
 
 $(BUILD_DIR)/basic_poly_test: basic_poly_test.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/ntt_scalar.o
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -march=rv64gcv $^ -lm -o $@
 
 sim_bench_poly_mult: $(BUILD_DIR)/bench_poly_mult
 	$(SIMULATOR) $^
