@@ -64,22 +64,24 @@ ubench_result_t bench_lat_##op(size_t n) { \
     long start = read_perf_counter(); \
     for (int i = 0; i < n / 16; i++) { \
         asm volatile( \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
-            #op " a0, a1, a0\n" \
+            "li a0, 3\n" \
+            "li a1, 0x1337beef\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
+            #op " a1, a1, a0\n" \
         : \
         : \
         : "a0", "a1"\
