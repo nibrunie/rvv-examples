@@ -269,7 +269,6 @@ int main(void) {
             printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
-            printf("elt_per_op: %d\n", bench_result.elt_per_op);
             printf("%s, %d, %d, %.3f, %.2f, %d\n", 
                    benchmarks[benchId].label, n, bench_result.perf_count,
                    (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
