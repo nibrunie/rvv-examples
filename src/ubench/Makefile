@@ -34,6 +34,7 @@ BUILD_DIR ?= $(PWD)/build/
 $(BUILD_DIR)/ubench: microbenchmarks.c
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=rv64gcv $^ -lm -o $@
+	$(OBJDUMP) -d $@ > $(BUILD_DIR)/ubench.dump
 
 
 sim_ubench: $(BUILD_DIR)/ubench

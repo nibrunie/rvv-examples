@@ -45,6 +45,7 @@ ubench_result_t baseline_bench(size_t n) {
     long stop = read_perf_counter();
     return (ubench_result_t){
         .perf_count = (stop - start),
+        .elt_per_op = 1,
         .errors = 0
     };
 };
@@ -59,6 +60,11 @@ BENCH_LAT_2OP_INSN(rem)
 BENCH_LAT_2OP_INSN(remu)
 BENCH_LAT_2OP_INSN(remw)
 BENCH_LAT_2OP_INSN(remuw)
+BENCH_LAT_2OP_INSN(mul)
+BENCH_LAT_2OP_INSN(mulh)
+BENCH_LAT_2OP_INSN(mulhsu)
+BENCH_LAT_2OP_INSN(mulhu)
+BENCH_LAT_2OP_INSN(mulw)
 
 BENCH_THROUGHPUT_2OP_INSN(add)
 BENCH_THROUGHPUT_2OP_INSN(div)
@@ -69,6 +75,62 @@ BENCH_THROUGHPUT_2OP_INSN(rem)
 BENCH_THROUGHPUT_2OP_INSN(remu)
 BENCH_THROUGHPUT_2OP_INSN(remw)
 BENCH_THROUGHPUT_2OP_INSN(remuw)
+BENCH_THROUGHPUT_2OP_INSN(mul)
+BENCH_THROUGHPUT_2OP_INSN(mulh)
+BENCH_THROUGHPUT_2OP_INSN(mulhsu)
+BENCH_THROUGHPUT_2OP_INSN(mulhu)
+BENCH_THROUGHPUT_2OP_INSN(mulw)
+
+
+BENCH_LAT_2OP_FPD_INSN(fadd)
+BENCH_LAT_2OP_FPD_INSN(fsub)
+BENCH_LAT_2OP_FPD_INSN(fdiv)
+BENCH_LAT_2OP_FPD_INSN(fmul)
+
+BENCH_THROUGHPUT_2OP_FPD_INSN(fadd)
+BENCH_THROUGHPUT_2OP_FPD_INSN(fsub)
+BENCH_THROUGHPUT_2OP_FPD_INSN(fdiv)
+BENCH_THROUGHPUT_2OP_FPD_INSN(fmul)
+
+BENCH_LAT_2OP_VEC_INSN(vadd, 1, 32)
+BENCH_LAT_2OP_VEC_INSN(vadd, 2, 32)
+BENCH_LAT_2OP_VEC_INSN(vadd, 4, 32)
+BENCH_LAT_2OP_VEC_INSN(vadd, 8, 32)
+
+BENCH_LAT_2OP_VEC_INSN(vfadd, 1, 32)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 2, 32)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 4, 32)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 8, 32)
+
+BENCH_LAT_2OP_VEC_INSN(vfmul, 1, 32)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 2, 32)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 4, 32)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 8, 32)
+
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 1, 32)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 2, 32)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 4, 32)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 8, 32)
+
+BENCH_LAT_2OP_VEC_INSN(vadd, 1, 64)
+BENCH_LAT_2OP_VEC_INSN(vadd, 2, 64)
+BENCH_LAT_2OP_VEC_INSN(vadd, 4, 64)
+BENCH_LAT_2OP_VEC_INSN(vadd, 8, 64)
+
+BENCH_LAT_2OP_VEC_INSN(vfadd, 1, 64)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 2, 64)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 4, 64)
+BENCH_LAT_2OP_VEC_INSN(vfadd, 8, 64)
+
+BENCH_LAT_2OP_VEC_INSN(vfmul, 1, 64)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 2, 64)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 4, 64)
+BENCH_LAT_2OP_VEC_INSN(vfmul, 8, 64)
+
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 1, 64)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 2, 64)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 4, 64)
+BENCH_LAT_2OP_VEC_INSN(vfdiv, 8, 64)
 
 int main(void) {
     int i;
@@ -84,6 +146,56 @@ int main(void) {
         BENCH_LAT_INSN_TC(remu),
         BENCH_LAT_INSN_TC(remw),
         BENCH_LAT_INSN_TC(remuw),
+        BENCH_LAT_INSN_TC(mul),
+        BENCH_LAT_INSN_TC(mulh),
+        BENCH_LAT_INSN_TC(mulhsu),
+        BENCH_LAT_INSN_TC(mulhu),
+        BENCH_LAT_INSN_TC(mulw),
+
+        BENCH_LAT_INSN_TC(fadd),
+        BENCH_LAT_INSN_TC(fsub),
+        BENCH_LAT_INSN_TC(fdiv),
+        BENCH_LAT_INSN_TC(fmul),
+
+        BENCH_LAT_VEC_INSN_TC(vadd, 1, 32),
+        BENCH_LAT_VEC_INSN_TC(vadd, 2, 32),
+        BENCH_LAT_VEC_INSN_TC(vadd, 4, 32),
+        BENCH_LAT_VEC_INSN_TC(vadd, 8, 32),
+
+        BENCH_LAT_VEC_INSN_TC(vfadd, 1, 32),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 2, 32),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 4, 32),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 8, 32),
+
+        BENCH_LAT_VEC_INSN_TC(vfmul, 1, 32),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 2, 32),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 4, 32),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 8, 32),
+
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 1, 32),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 2, 32),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 4, 32),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 8, 32),
+
+        BENCH_LAT_VEC_INSN_TC(vadd, 1, 64),
+        BENCH_LAT_VEC_INSN_TC(vadd, 2, 64),
+        BENCH_LAT_VEC_INSN_TC(vadd, 4, 64),
+        BENCH_LAT_VEC_INSN_TC(vadd, 8, 64),
+
+        BENCH_LAT_VEC_INSN_TC(vfadd, 1, 64),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 2, 64),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 4, 64),
+        BENCH_LAT_VEC_INSN_TC(vfadd, 8, 64),
+
+        BENCH_LAT_VEC_INSN_TC(vfmul, 1, 64),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 2, 64),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 4, 64),
+        BENCH_LAT_VEC_INSN_TC(vfmul, 8, 64),
+
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 1, 64),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 2, 64),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 4, 64),
+        BENCH_LAT_VEC_INSN_TC(vfdiv, 8, 64),
 
         BENCH_THROUGHPUT_INSN_TC(add),
         BENCH_THROUGHPUT_INSN_TC(div),
@@ -94,6 +206,16 @@ int main(void) {
         BENCH_THROUGHPUT_INSN_TC(remu),
         BENCH_THROUGHPUT_INSN_TC(remw),
         BENCH_THROUGHPUT_INSN_TC(remuw),
+        BENCH_THROUGHPUT_INSN_TC(mul),
+        BENCH_THROUGHPUT_INSN_TC(mulh),
+        BENCH_THROUGHPUT_INSN_TC(mulhsu),
+        BENCH_THROUGHPUT_INSN_TC(mulhu),
+        BENCH_THROUGHPUT_INSN_TC(mulw),
+
+        BENCH_THROUGHPUT_INSN_TC(fadd),
+        BENCH_THROUGHPUT_INSN_TC(fsub),
+        BENCH_THROUGHPUT_INSN_TC(fdiv),
+        BENCH_THROUGHPUT_INSN_TC(fmul),
     };
 #ifndef VERBOSE
     // condensed display
@@ -142,14 +264,15 @@ int main(void) {
             printf("%s used %d " PERF_METRIC "(s) to evaluate multiplication on a degree %d polynomial.\n",
                 benchmarks[benchId].label, bench_result.perf_count, n);
             printf("  " PERF_METRIC " per run:        %d\n", bench_result.perf_count);
-            printf("  " PERF_METRIC " per element:    %.3f\n", (double) bench_result.perf_count / n);
-            printf("  element(s) per " PERF_METRIC ": %.2e\n", (double) n / bench_result.perf_count);
+            printf("  " PERF_METRIC " per element:    %.3f\n", (double) bench_result.perf_count / (n * bench_result.elt_per_op));
+            printf("  element(s) per " PERF_METRIC ": %.2e\n", (double) (n * bench_result.elt_per_op) / bench_result.perf_count);
             printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
+            printf("elt_per_op: %d\n", bench_result.elt_per_op);
             printf("%s, %d, %d, %.3f, %.2f, %d\n", 
                    benchmarks[benchId].label, n, bench_result.perf_count,
-                   (double) bench_result.perf_count / n, (double) n / bench_result.perf_count,
+                   (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
                    bench_result.errors);
 #           endif
         }
