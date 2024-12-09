@@ -140,3 +140,41 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 
 #define BENCH_LAT_INSN_TC(op) (ubench_t){.bench = bench_lat_##op,                .label= "latency benchmark:    " #op}
 #define BENCH_THROUGHPUT_INSN_TC(op) (ubench_t){.bench = bench_throughput_##op,  .label= "throughput benchmark: " #op}
+
+/** Build a latency benchmark for a 2-operand vector instruction
+ *
+ * Latency is measure by building a chain of dependent instructions
+ */
+#define BENCH_LAT_2OP_VEC_INSN(op, LMUL) \
+ubench_result_t bench_lat_##op(size_t n) { \
+    long start = read_perf_counter(); \
+    __riscv_vsetvl_e32m##LMUL(LMUL * __riscv_vlenb() / 4); \
+    for (int i = 0; i < n / 16; i++) { \
+        asm volatile( \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+            #op " v8, v16, v24\n" \
+        : \
+        : \
+        : "v8", "v16, v24"\
+        ); \
+    } \
+    long stop = read_perf_counter(); \
+    return (ubench_result_t){ \
+        .perf_count = (stop - start), \
+        .errors = 0 \
+    }; \
+}\
