@@ -311,10 +311,10 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
     size_t vl = 0; \
     long start = read_perf_counter(); \
     asm volatile( \
-        "vsetvli t0, x0, e32, m" #LMUL "\n" \
+        "vsetvli t0, x0, e32, m" #LMUL ", ta, ma\n" \
         "li t0, 0x3c003c00\n" \
         "vmv.v.x v8, t0\n" \
-        "vsetvli %[vl], x0, e" #elt ", m" #LMUL "\n" \
+        "vsetvli %[vl], x0, e" #elt ", m" #LMUL ", ta, ma\n" \
         "vid.v v16\n" \
         "vor.vv v16, v16, v8\n" \
         "vid.v v24\n" \
@@ -347,7 +347,7 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
     cnt = n / 16; \
     start = read_perf_counter(); \
     asm volatile( \
-        "vsetvli t0, x0, e" #elt ", m" #LMUL "\n" \
+        "vsetvli t0, x0, e" #elt ", m" #LMUL ", ta, ma\n" \
         "vid.v v16\n" \
         "vid.v v24\n" \
     "1:\n" \
