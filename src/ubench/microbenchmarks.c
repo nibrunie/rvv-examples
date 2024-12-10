@@ -87,10 +87,20 @@ BENCH_LAT_2OP_FPD_INSN(fsub)
 BENCH_LAT_2OP_FPD_INSN(fdiv)
 BENCH_LAT_2OP_FPD_INSN(fmul)
 
+BENCH_LAT_2OP_FPS_INSN(fadd)
+BENCH_LAT_2OP_FPS_INSN(fsub)
+BENCH_LAT_2OP_FPS_INSN(fdiv)
+BENCH_LAT_2OP_FPS_INSN(fmul)
+
 BENCH_THROUGHPUT_2OP_FPD_INSN(fadd)
 BENCH_THROUGHPUT_2OP_FPD_INSN(fsub)
 BENCH_THROUGHPUT_2OP_FPD_INSN(fdiv)
 BENCH_THROUGHPUT_2OP_FPD_INSN(fmul)
+
+BENCH_THROUGHPUT_2OP_FPS_INSN(fadd)
+BENCH_THROUGHPUT_2OP_FPS_INSN(fsub)
+BENCH_THROUGHPUT_2OP_FPS_INSN(fdiv)
+BENCH_THROUGHPUT_2OP_FPS_INSN(fmul)
 
 BENCH_LAT_2OP_VEC_INSN(vadd, 1, 32)
 BENCH_LAT_2OP_VEC_INSN(vadd, 2, 32)
@@ -152,10 +162,15 @@ int main(void) {
         BENCH_LAT_INSN_TC(mulhu),
         BENCH_LAT_INSN_TC(mulw),
 
-        BENCH_LAT_INSN_TC(fadd),
-        BENCH_LAT_INSN_TC(fsub),
-        BENCH_LAT_INSN_TC(fdiv),
-        BENCH_LAT_INSN_TC(fmul),
+        BENCH_LAT_INSN_TC(fadd_d),
+        BENCH_LAT_INSN_TC(fsub_d),
+        BENCH_LAT_INSN_TC(fdiv_d),
+        BENCH_LAT_INSN_TC(fmul_d),
+
+        BENCH_LAT_INSN_TC(fadd_s),
+        BENCH_LAT_INSN_TC(fsub_s),
+        BENCH_LAT_INSN_TC(fdiv_s),
+        BENCH_LAT_INSN_TC(fmul_s),
 
         BENCH_LAT_VEC_INSN_TC(vadd, 1, 32),
         BENCH_LAT_VEC_INSN_TC(vadd, 2, 32),
@@ -212,10 +227,15 @@ int main(void) {
         BENCH_THROUGHPUT_INSN_TC(mulhu),
         BENCH_THROUGHPUT_INSN_TC(mulw),
 
-        BENCH_THROUGHPUT_INSN_TC(fadd),
-        BENCH_THROUGHPUT_INSN_TC(fsub),
-        BENCH_THROUGHPUT_INSN_TC(fdiv),
-        BENCH_THROUGHPUT_INSN_TC(fmul),
+        BENCH_THROUGHPUT_INSN_TC(fadd_d),
+        BENCH_THROUGHPUT_INSN_TC(fsub_d),
+        BENCH_THROUGHPUT_INSN_TC(fdiv_d),
+        BENCH_THROUGHPUT_INSN_TC(fmul_d),
+
+        BENCH_THROUGHPUT_INSN_TC(fadd_s),
+        BENCH_THROUGHPUT_INSN_TC(fsub_s),
+        BENCH_THROUGHPUT_INSN_TC(fdiv_s),
+        BENCH_THROUGHPUT_INSN_TC(fmul_s),
     };
 #ifndef VERBOSE
     // condensed display
