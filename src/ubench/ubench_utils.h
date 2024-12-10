@@ -175,29 +175,34 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 #define BENCH_THROUGHPUT_INSN_TC(op) (ubench_t){.bench = bench_throughput_##op,  .label= "throughput " #op}
 
 
-#define BENCH_THROUGHPUT_2OP_FPD_INSN(op) \
-ubench_result_t bench_throughput_##op(size_t n) { \
+// #define BENCH_THROUGHPUT_2OP_FPD_INSN(op) 
+
+#define BENCH_THROUGHPUT_2OP_FPD_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, d, "0x3fcdbeef3fcdbeef", "0x4abdcafe4abdcafe")
+#define BENCH_THROUGHPUT_2OP_FPS_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, s, "0xffffffff3fcdbeef", "0xffffffff4abdcafe")
+
+#define BENCH_THROUGHPUT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
+ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
     size_t cnt = n / 13; \
     long start = read_perf_counter(); \
     asm volatile( \
         "li t0, 0x3fcdbeef3fcdbeef\n" \
         "li t1, 0x4abdcafe4abdcafe\n" \
-        "fmv.d.x fa0, t0\n" \
-        "fmv.d.x fa1, t1\n" \
+        "fmv." #fmt_suffix ".x fa0, t0\n" \
+        "fmv." #fmt_suffix ".x fa1, t1\n" \
     "1:\n" \
-        #op ".d fa2, fa1, fa0\n" \
-        #op ".d fa3, fa1, fa0\n" \
-        #op ".d fa4, fa1, fa0\n" \
-        #op ".d fa5, fa1, fa0\n" \
-        #op ".d fa6, fa1, fa0\n" \
-        #op ".d fa7, fa1, fa0\n" \
-        #op ".d ft0, fa1, fa0\n" \
-        #op ".d ft1, fa1, fa0\n" \
-        #op ".d ft2, fa1, fa0\n" \
-        #op ".d ft3, fa1, fa0\n" \
-        #op ".d ft4, fa1, fa0\n" \
-        #op ".d ft5, fa1, fa0\n" \
-        #op ".d ft6, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa2, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa3, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa4, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa5, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa6, fa1, fa0\n" \
+        #op "." #fmt_suffix " fa7, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft0, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft1, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft2, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft3, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft4, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft5, fa1, fa0\n" \
+        #op "." #fmt_suffix " ft6, fa1, fa0\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
@@ -214,8 +219,8 @@ ubench_result_t bench_throughput_##op(size_t n) { \
     asm volatile( \
         "li t0, 0x3fcdbeef3fcdbeef\n" \
         "li t1, 0x4abdcafe4abdcafe\n" \
-        "fmv.d.x fa0, t0\n" \
-        "fmv.d.x fa1, t1\n" \
+        "fmv." #fmt_suffix ".x fa0, t0\n" \
+        "fmv." #fmt_suffix ".x fa1, t1\n" \
     "1:\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
@@ -244,68 +249,6 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 
 #define BENCH_LAT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
 ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
-    size_t cnt = n / 16; \
-    long start = read_perf_counter(); \
-    asm volatile( \
-        "li t0, " init_ft0 "\n" \
-        "li t2, " init_ft1 "\n" \
-        "fmv." #fmt_suffix ".x ft0, t0\n" \
-        "fmv." #fmt_suffix ".x ft1, t2\n" \
-        "fmv." #fmt_suffix ".x ft2, t2\n" \
-    "1:\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        #op "." #fmt_suffix " ft1, ft1, ft0\n" \
-        "addi %[cnt], %[cnt], -1\n" \
-        "bnez %[cnt], 1b\n" \
-    : [cnt]"+r"(cnt) \
-    : \
-    : "ft0", "ft1", "ft2"\
-    ); \
-    long stop = read_perf_counter(); \
-    long delta = stop - start; \
-    cnt = n / 16; \
-    start = read_perf_counter(); \
-    asm volatile( \
-        "li t0, 0x3fcdbeef3fcdbeef\n" \
-        "li t2, 0x4abdcafe4abdcafe\n" \
-        "fmv.d.x ft0, t0\n" \
-        "fmv.d.x ft1, t2\n" \
-        "fmv.d.x ft2, t2\n" \
-    "1:\n" \
-        "addi %[cnt], %[cnt], -1\n" \
-        "bnez %[cnt], 1b\n" \
-    : [cnt]"+r"(cnt) \
-    : \
-    : \
-    ); \
-    stop = read_perf_counter(); \
-    long correction = (stop - start); \
-    return (ubench_result_t){ \
-        .perf_count = (delta - correction), \
-        .elt_per_op = 1, \
-        .errors = 0 \
-    }; \
-}
-
-#define BENCH_THROUGHPUT_2OP_FPD_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, d, "0x3fcdbeef3fcdbeef", "0x4abdcafe4abdcafe")
-#define BENCH_THROUGHPUT_2OP_FPS_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, s, "0xffffffff3fcdbeef", "0xffffffff4abdcafe")
-
-#define BENCH_THROUGHPUT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
-ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
     size_t cnt = n / 16; \
     long start = read_perf_counter(); \
     asm volatile( \
