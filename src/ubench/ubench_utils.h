@@ -185,8 +185,8 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
     size_t cnt = n / 13; \
     long start = read_perf_counter(); \
     asm volatile( \
-        "li t0, 0x3fcdbeef3fcdbeef\n" \
-        "li t1, 0x4abdcafe4abdcafe\n" \
+        "li t0, " init_ft0 "\n" \
+        "li t1, " init_ft1 "\n" \
         "fmv." #fmt_suffix ".x fa0, t0\n" \
         "fmv." #fmt_suffix ".x fa1, t1\n" \
     "1:\n" \
@@ -308,12 +308,17 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
 
 
 #define BENCH_LAT_VEC_INSN_TC(op, LMUL, elt) (ubench_t){.bench = bench_lat_##op##_m##LMUL##_e##elt, .label= "latency " #op " m" #LMUL " e" #elt }
+#define BENCH_THROUGHPUT_VEC_INSN_TC(op, LMUL, elt) (ubench_t){.bench = bench_throughput_##op##_m##LMUL##_e##elt, .label= "throughput " #op " m" #LMUL " e" #elt }
 
 /** Build a latency benchmark for a 2-operand vector instruction
  *
  * Latency is measure by building a chain of dependent instructions
  */
-#define BENCH_LAT_2OP_VEC_INSN(op, LMUL, elt) \
+#define BENCH_LAT_2OP_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vv")
+#define BENCH_LAT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vs") 
+#define BENCH_LAT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "wv") 
+
+#define BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
 ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
     size_t cnt = n / 16; \
     size_t vl = 0; \
@@ -328,22 +333,89 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
         "vid.v v24\n" \
         "vor.vv v24, v24, v8\n" \
     "1:\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
-        #op ".vv v24, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        #op "." suffix " v8, v16, v24\n" \
+        "addi %[cnt], %[cnt], -1\n" \
+        "bnez %[cnt], 1b\n" \
+    : [cnt]"+r"(cnt), [vl]"+r"(vl) \
+    : \
+    : "t0" \
+    ); \
+    long stop = read_perf_counter(); \
+    long delta = stop - start; \
+    cnt = n / 16; \
+    start = read_perf_counter(); \
+    asm volatile( \
+        "vsetvli t0, x0, e" #elt ", m" #LMUL ", ta, ma\n" \
+        "vid.v v16\n" \
+        "vid.v v24\n" \
+    "1:\n" \
+        "addi %[cnt], %[cnt], -1\n" \
+        "bnez %[cnt], 1b\n" \
+    : [cnt]"+r"(cnt) \
+    : \
+    : \
+    ); \
+    stop = read_perf_counter(); \
+    long correction = stop - start; \
+    return (ubench_result_t){ \
+        .perf_count = (delta - correction), \
+        .elt_per_op = vl, \
+        .errors = 0 \
+    }; \
+}
+
+#define BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vv") 
+#define BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vs")
+#define BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "wv")
+
+#define BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
+ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt(size_t n) { \
+    size_t cnt = n / 18; \
+    size_t vl = 0; \
+    long start = read_perf_counter(); \
+    asm volatile( \
+        "vsetvli t0, x0, e32, m" #LMUL ", ta, ma\n" \
+        "li t0, 0x3c003c00\n" \
+        "vmv.v.x v8, t0\n" \
+        "vsetvli %[vl], x0, e" #elt ", m" #LMUL ", ta, ma\n" \
+        "vid.v v16\n" \
+        "vor.vv v16, v16, v8\n" \
+        "vid.v v24\n" \
+        "vor.vv v24, v24, v8\n" \
+    "1:\n" \
+        #op "." suffix " v4, v0, v8\n" \
+        #op "." suffix " v12, v16, v20\n" \
+        #op "." suffix " v24, v28, v0\n" \
+        #op "." suffix " v8, v0, v20\n" \
+        #op "." suffix " v16, v4, v28\n" \
+        #op "." suffix " v24, v28, v0\n" \
+        #op "." suffix " v4, v0, v8\n" \
+        #op "." suffix " v12, v16, v20\n" \
+        #op "." suffix " v24, v28, v0\n" \
+        #op "." suffix " v8, v0, v20\n" \
+        #op "." suffix " v16, v4, v28\n" \
+        #op "." suffix " v24, v28, v0\n" \
+        #op "." suffix " v4, v0, v8\n" \
+        #op "." suffix " v12, v16, v20\n" \
+        #op "." suffix " v24, v28, v0\n" \
+        #op "." suffix " v8, v0, v20\n" \
+        #op "." suffix " v16, v4, v28\n" \
+        #op "." suffix " v24, v28, v0\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt), [vl]"+r"(vl) \
