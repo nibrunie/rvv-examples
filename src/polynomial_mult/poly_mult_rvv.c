@@ -654,37 +654,21 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
             
 
-#if 0
+#ifdef USE_SLIDE_PAIR_SWAP
             // swapping odd/even pairs of coefficients
             TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 1, vl);
             vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
 
 #else
-            // swapping odd/even pairs of coefficients
-            TYPE_LMUL(vint32) vec_swapped_coeffs_2 = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 1, vl);
-            vec_swapped_coeffs_2 = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs_2, vec_coeffs, 1, vl);
-
-            // TODO: implementing odd/even coefficients swap with:
             // 1. vnsrl e64 -> e32
             TYPE_LMUL(vuint64) vec_coeffs_u64 = FUNC_LMUL_2PART(__riscv_vreinterpret_v_u32, _u64)( FUNC_LMUL_2PART(__riscv_vreinterpret_v_i32, _u32)(vec_coeffs));
             NTYPE_LMUL(vuint32) vec_odd_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 32, vl / 2);
-            // NTYPE_LMUL(vint32) vec_even_coeffs = NFUNC_LMUL_2PART(__riscv_vreinterpret_v_u32, _i32)(NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 0, vl / 2));
             NTYPE_LMUL(vuint32) vec_even_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 0, vl / 2);
             // 2. vwmacc ()
-            // TYPE_LMUL(vint64) vec_coeffs_i64 = FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(FUNC_LMUL(__riscv_vzext_vf2_u64)(vec_odd_coeffs, vl / 2));
-            // TYPE_LMUL(vint64) vec_coeffs_i64 = FUNC_LMUL(__riscv_vwadd_vv_i64)(NFUNC_LMUL_2PART(__riscv_vreinterpret_v_u32, _i32)(vec_odd_coeffs), vec_even_coeffs, vl / 2);
             TYPE_LMUL(vuint64) vec_coeffs_i64 = FUNC_LMUL(__riscv_vwaddu_vv_u64)(vec_odd_coeffs, vec_even_coeffs, vl / 2);
             vec_coeffs_i64 = FUNC_LMUL(__riscv_vwmaccu_vx_u64)(vec_coeffs_i64, 0xffffffffu /* 2^32 - 1 */, vec_even_coeffs, vl / 2);
-            //TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(vec_coeffs_i64);
             TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(vec_coeffs_i64));
 
-            printf("swapped coeffs:\n");
-            NTYPE_LMUL(vuint32) vec_even_coeffs_u = vec_even_coeffs; // NFUNC_LMUL_2PART(__riscv_vreinterpret_v_i32, _u32)(vec_even_coeffs); 
-            TYPE_LMUL(vuint64) tmp = FUNC_LMUL(__riscv_vwmulu_vx_u64)(vec_even_coeffs_u, 0xffffffffu, vl / 2);
-            tmp = FUNC_LMUL(__riscv_vwaddu_wv_u64)(tmp, vec_even_coeffs_u, vl / 2);
-            display_vint32(FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(tmp)), vl);
-            display_vint32(vec_swapped_coeffs, vl);
-            display_vint32(vec_swapped_coeffs_2, vl);
 #endif
 
 
