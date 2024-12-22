@@ -660,6 +660,8 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
 
 #else
+            // using a mix of narrowing shifts and widening arithmetic operations
+            // to peform pairwise element swap
             // 1. vnsrl e64 -> e32
             TYPE_LMUL(vuint64) vec_coeffs_u64 = FUNC_LMUL_2PART(__riscv_vreinterpret_v_u32, _u64)( FUNC_LMUL_2PART(__riscv_vreinterpret_v_i32, _u32)(vec_coeffs));
             NTYPE_LMUL(vuint32) vec_odd_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 32, vl / 2);
