@@ -668,7 +668,7 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             NTYPE_LMUL(vuint32) vec_even_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 0, vl / 2);
             // 2. vwmacc ()
             TYPE_LMUL(vuint64) vec_coeffs_i64 = FUNC_LMUL(__riscv_vwaddu_vv_u64)(vec_odd_coeffs, vec_even_coeffs, vl / 2);
-            vec_coeffs_i64 = FUNC_LMUL(__riscv_vwmaccu_vx_u64)(vec_coeffs_i64, 0xffffffffu /* 2^32 - 1 */, vec_even_coeffs, vl / 2);
+            vec_coeffs_i64 = FUNC_LMUL(__riscv_vwmaccu_vx_u64)(vec_coeffs_i64, -1 /* 2^32 - 1 */, vec_even_coeffs, vl / 2);
             TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(vec_coeffs_i64));
 
 #endif
