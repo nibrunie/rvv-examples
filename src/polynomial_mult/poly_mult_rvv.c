@@ -660,6 +660,11 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
 
 #else
+#ifdef USE_IDENTITY_SWAP
+            // identity to serve as benchmark baseline 
+            // NOTE: this path is not expected to be functional
+            TYPE_LMUL(vint32) vec_swapped_coeffs = vec_coeffs;
+#else
             // using a mix of narrowing shifts and widening arithmetic operations
             // to peform pairwise element swap
             // 1. vnsrl e64 -> e32
@@ -671,6 +676,7 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             vec_coeffs_i64 = FUNC_LMUL(__riscv_vwmaccu_vx_u64)(vec_coeffs_i64, -1 /* 2^32 - 1 */, vec_even_coeffs, vl / 2);
             TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(vec_coeffs_i64));
 
+#endif
 #endif
 
 
