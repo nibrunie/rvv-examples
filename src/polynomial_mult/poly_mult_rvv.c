@@ -615,6 +615,8 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         local_level = 6;
         n = 2;
     }
+    void poly_dump(polynomial_t poly);
+    static int counter = 0;
 
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
@@ -687,8 +689,10 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             // fusing optimization for the next level (4-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 4, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
 
+#if 1
             // fusing optimization for the next level (8-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 8, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+#endif
 
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
@@ -698,6 +702,12 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         assert(4 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=4 for level 5 must fit in vlmax for current LMUL
         assert(8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=8 for level 4 must fit in vlmax for current LMUL
     }
+
+    if (counter++ == 0) {
+        printf("fastest_helper:\n");
+        poly_dump(*dst);
+    }
+
 
     // disabling assert to allow skipping some optimization levels due to LMUL too small to fit
     // a local element group to perform swapping 
@@ -760,16 +770,25 @@ void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, in
     // iteration over the local number of coefficients
     int local_level = 6;
     int n = _n;
-    // masks used for the odd/even split using vcompress instructions
-    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, __riscv_vsetvlmax_e32m1());
-    MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
 
     {
 
         rvv_ntt_transform_asm_internal(dst, coeffs, _n, level, rootPowers);
         local_level = 6;
         n = 2;
+
+        
     }
+    void poly_dump(polynomial_t poly);
+    static int counter = 0;
+    if (counter++ == 0) {
+        printf("asm_helper:\n");
+        poly_dump(*dst);
+    }
+
+    // masks used for the odd/even split using vcompress instructions
+    vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, __riscv_vsetvlmax_e32m1());
+    MASK_TYPE_E32(vbool) mask_odd_b4 = MASK_FUNC_E32(__riscv_vreinterpret_v_i8m1_b)(mask_odd_i8);
 
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
@@ -835,6 +854,7 @@ void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, in
 #endif
 
 
+#if 0
             vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_lvl6_b4, vec_coeffs, vec_coeffs, vl);
             vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
             // Note: no modulo reduction is performed for level 6
@@ -842,8 +862,10 @@ void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, in
             // fusing optimization for the next level (4-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 4, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
 
+
             // fusing optimization for the next level (8-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 8, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+#endif
 
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
