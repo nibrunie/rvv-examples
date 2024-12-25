@@ -133,12 +133,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 // 
 // last generic levels
-#define even_coeffs_addr t0
+#define even_coeffs_addr t3
 #define odd_coeffs_addr t1
-//   t0: even_coeffs
+//   t0: coeffs_a
 //   t1: odd_coeffs
-//   t2: m
-//   t3: half_n
+//   t2: temporary
+//   t3: even_coeffs
 //   t4: twiddleFactor
 //   t5: local_level
 //   t6: n
@@ -152,29 +152,28 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     // for (; local_level >= 0; n = 2 * n, local_level--) {
 .ntt_level:
-    //     const int m = 1 << local_level;
-	li t2, 1
-	sll t2, t2, t5 // t2 <= m = (1 << local_level)
     //     const int half_n = n / 2;
-	srl t3, t6, 1 // t3 <= n / 2 (half_n)
+	// srl t3, t6, 1 // t3 <= n / 2 (half_n)
 	// int j = 0
 	li a5, 0
 
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-	mv a3, t3 // a3 <= avl = half_n
+	srli a3, t6, 1 // a3 <= avl = half_n
     //         assert(avl <= 64); // rootPowers[level] is at most a 64-element array
 	// t0 <- coeffs_a
 	ld	even_coeffs_addr, 8(a0)
-	 
-	srl t3, t6, 1 // t3 <= n / 2 (half_n)
+	// 
+	// srl t3, t6, 1 // t3 <= n / 2 (half_n)
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
-	slli a7, a5, 1 // 2 * j
-	mul a7, a7, t3 // 2 * j * half_n
+	mul a7, a5, t6 // 2 * j * half_n = j * n
+	sll a7, a7, 2 // sizeof(int)=4 * 2 * j * half_n
 	add even_coeffs_addr, even_coeffs_addr, a7 // t0 <- even_coeffs
+	// 
     //         int* odd_coeffs = even_coeffs + half_n;
-	add odd_coeffs_addr, even_coeffs_addr, t3 // t1 <- odd_coeffs
+	slli a7, t6, 1 // sizeof(int) * half_n = 4 * n / 2 = 2 *n
+	add odd_coeffs_addr, even_coeffs_addr, a7 // t1 <- odd_coeffs
     //         int* twiddleFactor = rootPowers[local_level];
 	li t4, (64 * 4)
 	mul t4, t4, t5 
@@ -192,7 +191,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //             TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
 	vmul.vv v16, v16, v24
     //             TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
-	vle32.v	v8, (even_coeff_addr)
+	vle32.v	v8, (even_coeffs_addr)
     //             TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
 	vadd.vv v24, v8, v16
     //             vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
@@ -203,13 +202,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
     //             } else {
 #ifdef USE_VREM_MODULO
-	li t3, 3329
+	li t2, 3329
     //                 // even results
     //                 vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
-	vrem.vx v24, v24, t3 // to be replaced by Barrett's reduction
+	vrem.vx v24, v24, t2 // to be replaced by Barrett's reduction
     //                 // odd results
     //                 vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
-	vrem.vx v16, v16, t3 // to be replaced by Barrett's reduction
+	vrem.vx v16, v16, t2 // to be replaced by Barrett's reduction
 #endif
     //             }
 
@@ -222,16 +221,20 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	slli	a7, a7, 2
 	add	even_coeffs_addr, even_coeffs_addr, a7
 	add odd_coeffs_addr, odd_coeffs_addr, a7
+	add t4, t4, a7 // twiddle_factors += vl
 	bnez	a3, .ntt_level_avl_loop
     //         }
 	addi a5, a5, 1 // j++
+    //     const int m = 1 << local_level;
+	li t2, 1
+	sll t2, t2, t5 // t2 <= m = (1 << local_level)
 	sub a6, a5, t2 // j - m
 	bnez a6, .ntt_j_loop
     //     } 
     // }
 	addi t5, t5, -1 // local_level --
 	sll t6, t6, 1 // n = 2 * n
-	bltz t5, .ntt_level
+	bgez t5, .ntt_level
 
 
 # %bb.37:                               # %._crit_edge111.3

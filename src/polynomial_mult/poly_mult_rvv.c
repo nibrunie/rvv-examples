@@ -703,10 +703,12 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         assert(8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=8 for level 4 must fit in vlmax for current LMUL
     }
 
+#if 0
     if (counter++ == 0) {
         printf("fastest_helper:\n");
         poly_dump(*dst);
     }
+#endif
 
 
     // disabling assert to allow skipping some optimization levels due to LMUL too small to fit
@@ -779,12 +781,16 @@ void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, in
 
         
     }
+    return;
+
+#if 0
     void poly_dump(polynomial_t poly);
     static int counter = 0;
     if (counter++ == 0) {
         printf("asm_helper:\n");
         poly_dump(*dst);
     }
+#endif
 
     // masks used for the odd/even split using vcompress instructions
     vint8m1_t mask_odd_i8 = __riscv_vmv_v_x_i8m1(0xAA, __riscv_vsetvlmax_e32m1());
