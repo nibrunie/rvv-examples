@@ -45,7 +45,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 // reconstruction level 6, 5, and 4
 .loop_reconstruct_level_6_5_4:
-	vsetvli	a7, a3, e32, m4, ta, mu
+	vsetvli	a7, a3, e32, m8, ta, mu
 	// loading indices
 	vle32.v	v8, (a5)
 	// performning permutation
@@ -75,16 +75,19 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-    // WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
+	vsetvli	a6, x0, e32, m4, ta, mu
 	vwmul.vx v24, v8, t4
-    // TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
-	vnsra.wi v16, v24, 24
-    // v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
-	vnmsac.vx v8, t1, v16
-    // MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
+	vnsra.wi v24, v24, 24
+	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
-    // v = FUNC_LMUL_MASKED(__riscv_vadd_vx_i32)(cmp_mask, v, v, -3329, vl);
 	vsub.vx v8, v8, t1, v0.t
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v16, v16, 24
+	vnmsac.vx v12, t1, v16
+	vmsge.vx v0, v12, t1
+	vsub.vx v12, v12, t1, v0.t
+	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
 	// butterfly
@@ -106,16 +109,19 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-    // WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
+	vsetvli	a6, x0, e32, m4, ta, mu
 	vwmul.vx v24, v8, t4
-    // TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
-	vnsra.wi v16, v24, 24
-    // v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
-	vnmsac.vx v8, t1, v16
-    // MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
+	vnsra.wi v24, v24, 24
+	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
-    // v = FUNC_LMUL_MASKED(__riscv_vadd_vx_i32)(cmp_mask, v, v, -3329, vl);
 	vsub.vx v8, v8, t1, v0.t
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v16, v16, 24
+	vnmsac.vx v12, t1, v16
+	vmsge.vx v0, v12, t1
+	vsub.vx v12, v12, t1, v0.t
+	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
 	// storing results
