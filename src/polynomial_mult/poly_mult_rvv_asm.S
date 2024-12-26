@@ -36,6 +36,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li t3, (4 * 64 * 4)
 	add t3, a4, t3 // t3 <- rootPowers[4]
 
+	// hoisting constants used for modulo reduction (the second
+	// one is only used when Barrett's method is used)
+	li t1, 3329 // should be hoisted outside the loop
+#ifndef USE_VREM_MODULO
+	li t4, 5039
+#endif
+
 // reconstruction level 6, 5, and 4
 .loop_reconstruct_level_6_5_4:
 	vsetvli	a7, a3, e32, m4, ta, mu
@@ -65,12 +72,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
 	vadd.vv v8, v16, v8
 
-	li t1, 3329 // should be hoisted outside the loop
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
     // WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
-	li t4, 5039
 	vwmul.vx v24, v8, t4
     // TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
 	vnsra.wi v16, v24, 24
