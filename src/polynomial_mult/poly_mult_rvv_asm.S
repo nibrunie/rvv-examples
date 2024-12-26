@@ -36,6 +36,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li t3, (4 * 64 * 4)
 	add t3, a4, t3 // t3 <- rootPowers[4]
 
+	li t5, (3 * 64 * 4)
+	add t5, a4, t5 // t5 <- rootPowers[3]
+
 	// hoisting constants used for modulo reduction (the second
 	// one is only used when Barrett's method is used)
 	li t1, 3329 // should be hoisted outside the loop
@@ -44,7 +47,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #endif
 
 // reconstruction level 6, 5, and 4
-.loop_reconstruct_level_6_5_4:
+.loop_reconstruct_level_6_5_4_3:
 	vsetvli	a7, a3, e32, m8, ta, mu
 	// loading indices
 	vle32.v	v8, (a5)
@@ -87,6 +90,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
+
+	// level 4
 
 	// butterfly
     // swapping odd/even pairs of coefficients
@@ -138,6 +143,42 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
+
+	// level 3
+	// butterfly
+	// a single 8-element group of twiddle factor is required
+	vsetvli	a6, x0, e32, m2, ta, ma
+	vle32.v v24, (t5) // loading twiddleFactor
+
+	vmul.vv v18, v10, v24
+	vmul.vv v22, v14, v24
+
+	vsub.vv v10, v8, v18
+	vadd.vv v8, v8, v18
+
+	vsub.vv v14, v12, v22
+	vadd.vv v12, v12, v22
+
+	// assume t1 == 3329 and t4 == 5039
+#ifdef USE_VREM_MODULO
+	vsetvli	a6, x0, e32, m8, ta, mu
+	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
+#else
+	vsetvli	a6, x0, e32, m4, ta, mu
+	vwmul.vx v24, v8, t4
+	vnsra.wi v24, v24, 24
+	vnmsac.vx v8, t1, v24
+	vmsge.vx v0, v8, t1
+	vsub.vx v8, v8, t1, v0.t
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v16, v16, 24
+	vnmsac.vx v12, t1, v16
+	vmsge.vx v0, v12, t1
+	vsub.vx v12, v12, t1, v0.t
+	vsetvli	a6, x0, e32, m8, ta, mu
+#endif
+
 	// storing results
 	vse32.v	v8, (t0)
 	sub	a3, a3, a7
@@ -146,7 +187,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	add	a5, a5, a7
 	// add t2, t2, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
 	// add t3, t3, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
-	bnez	a3, .loop_reconstruct_level_6_5_4
+	bnez	a3, .loop_reconstruct_level_6_5_4_3
 
 // 
 // last generic levels
@@ -167,8 +208,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t2 is used as a temporary register whenever one is need
     //    n = 16;
     //    local_level = 3;
-	li t5, 3 // t5 <= local_level
-	li t6, 16 // t6 <= n
+	li t5, 2 // t5 <= local_level
+	li t6, 32 // t6 <= n
 
     // for (; local_level >= 0; n = 2 * n, local_level--) {
 .ntt_level:
