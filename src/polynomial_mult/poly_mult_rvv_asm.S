@@ -179,6 +179,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li twiddle_factors_addr, (64 * 4)
 	mul twiddle_factors_addr, twiddle_factors_addr, t5 
 	add twiddle_factors_addr, a4, twiddle_factors_addr // t4 <- rootPowers[local_level]
+	//
+	// q (used for modulo reduction)
+	li a6, 3329
+	// 2^24 / q
+	li t2, 5039
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
 .ntt_level_avl_loop:
@@ -199,35 +204,30 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsub.vv v16, v8, v16
 
 #ifdef USE_VREM_MODULO
-	li t2, 3329
     //                 // even results
     //                 vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
-	vrem.vx v24, v24, t2 // to be replaced by Barrett's reduction
+	vrem.vx v24, v24, a6 // to be replaced by Barrett's reduction
     //                 // odd results
     //                 vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
-	vrem.vx v16, v16, t2 // to be replaced by Barrett's reduction
+	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
 #else
     //                 vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
     //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
 	// Barrett's reduction of v24 / vec_even_results
 	// TODO: maximum of LMUL=4 (because widening requires EMUL=8), could
 	// be optmized with vl/LMUL change
-	li t2, 5039
 	vwmul.vx v8, v24, t2
 	vnsra.wi v8, v8, 24
-	li t2, 3329
-	vnmsac.vx v24, t2, v8
-	vmsge.vx v0, v24, t2
-	vsub.vx v24, v24, t2, v0.t
+	vnmsac.vx v24, a6, v8
+	vmsge.vx v0, v24, a6
+	vsub.vx v24, v24, a6, v0.t
 
 	// Barrett's reduction of v16 / vec_odd_results
-	li t2, 5039
 	vwmul.vx v8, v16, t2
 	vnsra.wi v8, v8, 24
-	li t2, 3329
-	vnmsac.vx v16, t2, v8
-	vmsge.vx v0, v16, t2
-	vsub.vx v16, v16, t2, v0.t
+	vnmsac.vx v16, a6, v8
+	vmsge.vx v0, v16, a6
+	vsub.vx v16, v16, a6, v0.t
 #endif
     //             }
     //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
