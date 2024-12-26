@@ -95,9 +95,19 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
 	vmul.vv v8, v8, v24, v0.t
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
-	vslidedown.vi v16, v8, 4
+	# vslidedown.vi v16, v8, 4
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
-	vslideup.vi v16, v8, 4, v0.t
+	# vslideup.vi v16, v8, 4, v0.t
+	// explicit 4-element swap assuming VLEN=128
+	vmv1r.v v16, v9 
+	vmv1r.v v17, v8 
+	vmv1r.v v18, v11
+	vmv1r.v v19, v10
+	vmv1r.v v20, v13
+	vmv1r.v v21, v12
+	vmv1r.v v22, v15
+	vmv1r.v v23, v14
+
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
 	vrsub.vi v8, v8, 0, v0.t
     // vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
