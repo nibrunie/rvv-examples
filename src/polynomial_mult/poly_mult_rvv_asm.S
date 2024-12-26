@@ -1,4 +1,4 @@
-// void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
+// void rvv_ntt_transform_asm_internal(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
 // a0: destination buffer
 // a1: input buffer
 // a2: number of elements (should be 128)
@@ -197,10 +197,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //             vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
 	vsub.vv v16, v8, v16
 
-    //             if (1) {
-    //                 vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
-    //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
-    //             } else {
 #ifdef USE_VREM_MODULO
 	li t2, 3329
     //                 // even results
@@ -210,6 +206,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //                 vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
 	vrem.vx v16, v16, t2 // to be replaced by Barrett's reduction
 #else
+    //                 vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
+    //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
 	// Barrett's reduction of v24 / vec_even_results
 	// TODO: maximum of LMUL=4 (because widening requires EMUL=8), could
 	// be optmized with vl/LMUL change
