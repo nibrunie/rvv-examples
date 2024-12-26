@@ -90,31 +90,37 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// butterfly
     // swapping odd/even pairs of coefficients
+	// a single 4-element group of twiddle factor is required
+	vsetvli	a6, x0, e32, m1, ta, ma
 	vle32.v v24, (t3) // loading twiddleFactor
-	vmv1r.v v0, v3
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-	vmul.vv v8, v8, v24, v0.t
+	// vmul.vv v, v8, v24, v0.t
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
 	# vslidedown.vi v16, v8, 4
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
 	# vslideup.vi v16, v8, 4, v0.t
 	// explicit 4-element swap assuming VLEN=128
-	vmv1r.v v16, v9 
-	vmv1r.v v17, v8 
-	vmv1r.v v18, v11
-	vmv1r.v v19, v10
-	vmv1r.v v20, v13
-	vmv1r.v v21, v12
-	vmv1r.v v22, v15
-	vmv1r.v v23, v14
+	vmul.vv v17, v9, v24
+	vmul.vv v19, v11, v24
+	vmul.vv v21, v13, v24
+	vmul.vv v23, v15, v24
 
-    // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
-	vrsub.vi v8, v8, 0, v0.t
-    // vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
-	vadd.vv v8, v16, v8
+	vsub.vv v9, v8, v17
+	vadd.vv v8, v8, v17
+
+	vsub.vv v11, v10, v19
+	vadd.vv v10, v10, v19
+
+	vsub.vv v13, v12, v21
+	vadd.vv v12, v12, v21
+
+	vsub.vv v15, v14, v23
+	vadd.vv v14, v14, v23
+
 
 	// assume t1 == 3329 and t4 == 5039
 #ifdef USE_VREM_MODULO
+	vsetvli	a6, x0, e32, m8, ta, mu
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
 	vsetvli	a6, x0, e32, m4, ta, mu
