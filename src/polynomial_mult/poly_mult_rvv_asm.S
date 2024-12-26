@@ -14,17 +14,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	auipc	a3, %got_pcrel_hi(ntt_coeff_indices_128)
 	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a3)
 	mv	a3, a2
-// permutation
-.loop_permute:
-	vsetvli	a7, a3, e32, m8, ta, ma
-	vle32.v	v8, (a5)
-	vluxei32.v	v8, (a1), v8
-	vse32.v	v8, (t0)
-	sub	a3, a3, a7
-	slli	a7, a7, 2
-	add	a5, a5, a7
-	add	t0, t0, a7
-	bnez	a3, .loop_permute
 
 // building mask
 	li t0, 0xaa
@@ -50,8 +39,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 // reconstruction level 6, 5, and 4
 .loop_reconstruct_level_6_5_4:
 	vsetvli	a7, a3, e32, m4, ta, mu
-	// loading inputs into v8, vec_coeffs
-	vle32.v	v8, (t0)
+	// loading indices
+	vle32.v	v8, (a5)
+	// performning permutation
+	vluxei32.v	v8, (a1), v8
 	// computing swapped elements
 	vslidedown.vi v16, v8, 1
 	vmv1r.v v0, v1 // v0 <- v1 (0xaa mask)
@@ -127,6 +118,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	sub	a3, a3, a7
 	slli	a7, a7, 2
 	add	t0, t0, a7
+	add	a5, a5, a7
 	// add t2, t2, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
 	// add t3, t3, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
 	bnez	a3, .loop_reconstruct_level_6_5_4
