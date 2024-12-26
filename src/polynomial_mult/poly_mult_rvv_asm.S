@@ -278,7 +278,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         {
 .ntt_level_avl_loop:
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-	vsetvli	a7, a3, e32, m4, ta, ma
+	vsetvli	a7, a3, e32, m8, ta, ma
     //             // TODO even coefficients should be loaded after odd+twiddleFactor as they are needed last
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
 	vle32.v	v16, (odd_coeffs_addr)
@@ -306,15 +306,25 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// Barrett's reduction of v24 / vec_even_results
 	// TODO: maximum of LMUL=4 (because widening requires EMUL=8), could
 	// be optmized with vl/LMUL change
+	vsetivli	x0, 16, e32, m4, ta, ma
 	vwmul.vx v8, v24, t2
 	vnsra.wi v8, v8, 24
+	vwmul.vx v0, v28, t2
+	vnsra.wi v12, v0, 24
+
+	vsetvli	a7, x0, e32, m8, ta, ma
 	vnmsac.vx v24, a6, v8
 	vmsge.vx v0, v24, a6
 	vsub.vx v24, v24, a6, v0.t
 
+	vsetivli	x0, 16, e32, m4, ta, ma
 	// Barrett's reduction of v16 / vec_odd_results
 	vwmul.vx v8, v16, t2
 	vnsra.wi v8, v8, 24
+	vwmul.vx v0, v20, t2
+	vnsra.wi v12, v0, 24
+
+	vsetvli	a7, x0, e32, m8, ta, ma
 	vnmsac.vx v16, a6, v8
 	vmsge.vx v0, v16, a6
 	vsub.vx v16, v16, a6, v0.t
