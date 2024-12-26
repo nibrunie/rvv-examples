@@ -79,15 +79,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vwmul.vx v24, v8, t4
 	vnsra.wi v24, v24, 24
 	vnmsac.vx v8, t1, v24
-	vmsge.vx v0, v8, t1
-	vsub.vx v8, v8, t1, v0.t
 
 	vwmul.vx v16, v12, t4
 	vnsra.wi v16, v16, 24
 	vnmsac.vx v12, t1, v16
-	vmsge.vx v0, v12, t1
-	vsub.vx v12, v12, t1, v0.t
 	vsetvli	a6, x0, e32, m8, ta, mu
+	vmsge.vx v0, v8, t1
+	vsub.vx v8, v8, t1, v0.t
 #endif
 
 	// butterfly
