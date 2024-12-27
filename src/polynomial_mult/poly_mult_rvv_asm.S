@@ -353,3 +353,77 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .Lfunc_end3:
 	.size	rvv_ntt_transform_asm_internal, .Lfunc_end3-rvv_ntt_transform_asm_internal
                                         # -- End function
+
+// void rvv_ntt_mult_scale_asm(int* dst, int* lhs, int* rhs); 
+// a0: destination buffer
+// a1: lhs input buffer
+// a2: rhs input buffer
+.globl	rvv_ntt_mult_scale_asm # -- Begin function rvv_ntt_transform_asm_internal
+	.p2align	1
+	.type	rvv_ntt_mult_scale_asm,@function
+rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
+	li a3, 128 // a3 = avl = 128
+	// q (used for modulo reduction)
+	li a6, 3329
+	// 2^24 / q
+	li t2, 5039
+	// 1 / n mod q
+	li t3, 3303
+.rvv_ntt_mult_scale_avl_loop:
+	vsetvli	a7, a3, e32, m8, ta, ma
+	// loading lhs coefficients
+	vle32.v	v16, (a1)
+	// loading rhs coefficients
+	vle32.v	v8, (a2)
+
+	// element-wise multiplication
+	vmul.vv v16, v16, v8
+
+	// modulo reduction for element wise multiplication
+#ifdef USE_VREM_MODULO
+	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
+#else
+	vsetivli	x0, 16, e32, m4, ta, ma
+	// Barrett's reduction of v16 / vec_odd_results
+	vwmul.vx v8, v16, t2
+	vnsra.wi v8, v8, 24
+	vwmul.vx v0, v20, t2
+	vnsra.wi v12, v0, 24
+
+	vsetvli	a7, x0, e32, m8, ta, ma
+	vnmsac.vx v16, a6, v8
+	vmsge.vx v0, v16, a6
+	vsub.vx v16, v16, a6, v0.t
+#endif
+
+	// degree scaling
+	vmul.vx v16, v16, t3
+
+	// modulo reduction for element wise multiplication
+#ifdef USE_VREM_MODULO
+	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
+#else
+	vsetivli	x0, 16, e32, m4, ta, ma
+	// Barrett's reduction of v16 / vec_odd_results
+	vwmul.vx v8, v16, t2
+	vnsra.wi v8, v8, 24
+	vwmul.vx v0, v20, t2
+	vnsra.wi v12, v0, 24
+
+	vsetvli	a7, x0, e32, m8, ta, ma
+	vnmsac.vx v16, a6, v8
+	vmsge.vx v0, v16, a6
+	vsub.vx v16, v16, a6, v0.t
+#endif
+
+	vse32.v	v16, (a0)
+
+	sub	a3, a3, a7
+	slli	a7, a7, 2
+	add a0, a0, a7 // updating destination address
+	add	a1, a1, a7 // updating lhs address
+	add a2, a2, a7 // updating rhs address
+	bnez	a3, .rvv_ntt_mult_scale_avl_loop
+.rvv_ntt_mult_scale_asm_end:
+	ret
+	.size	rvv_ntt_mult_scale_asm, .rvv_ntt_mult_scale_asm_end-rvv_ntt_transform_asm_internal

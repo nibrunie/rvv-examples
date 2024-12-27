@@ -960,6 +960,7 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
 */
 extern void rvv_ntt_transform_asm_internal(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
 
+extern void rvv_ntt_mult_scale_asm(int* dst, int* lhs, int* rhs); 
 
 void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
@@ -975,13 +976,14 @@ void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs
     rvv_ntt_transform_asm_internal(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
 
     // element-size multiplication using RVV
-    rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+    // rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+    rvv_ntt_mult_scale_asm(ntt_lhs_times_rhs.coeffs, ntt_lhs.coeffs, ntt_lhs_times_rhs.coeffs);
 
     rvv_ntt_transform_asm_internal(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
 
     // division by the degree
-    dst->degree = lhs.degree;
-    rvv_ntt_degree_scaling(dst, ring);
+    // dst->degree = lhs.degree;
+    // rvv_ntt_degree_scaling(dst, ring);
 
     free(ntt_lhs.coeffs);
     free(ntt_lhs_times_rhs.coeffs);
