@@ -31,9 +31,17 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	mv	a3, a2 // a3 <- avl
 	ld	t0, 8(a0) // t0 <- destination buffer
 
+	vsetvli	a7, a3, e32, m8, ta, mu
+	slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
+
 	// int rootPowers[8][64]
 	li t2, (5 * 64 * 4)
 	add t2, a4, t2 // t2 <- rootPowers[5]
+	vmv.v.i v24, 1
+	vmv1r.v v0, v2
+	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
+
+
 
 	li t3, (4 * 64 * 4)
 	add t3, a4, t3 // t3 <- rootPowers[4]
@@ -66,12 +74,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t2: current address of twiddle factor for level 5
 //   t4: 2^32 // q
 //   t6: sizeof(int) * vl => byte address increment update
-	vsetvli	a7, a3, e32, m8, ta, mu
-	slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
-
-	vmv.v.i v24, 1
-	vmv1r.v v0, v2
-	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
 .loop_reconstruct_level_6_5_4_3_2:
 	// loading indices
 	vle32.v	v8, (a5)
@@ -88,11 +90,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// level 5 butterfly
     // swapping odd/even pairs of coefficients
-	vmv1r.v v0, v2
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
 	vmul.vv v8, v8, v24
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
 	vslidedown.vi v16, v8, 2
+	vmv1r.v v0, v2
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
 	vslideup.vi v16, v8, 2, v0.t
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
@@ -196,8 +198,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// updating addresses and loop counter
 	addi	a3, a3, -32
-	add	t0, t0, t6
 	add	a5, a5, t6
+	add	t0, t0, t6
 	bnez	a3, .loop_reconstruct_level_6_5_4_3_2
 
 // 
@@ -275,6 +277,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //                 // even results
     //                 vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
 	vrem.vx v24, v24, a6 // to be replaced by Barrett's reduction
+    //             }
+    //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+	vse32.v	v24, (even_coeffs_addr)
     //                 // odd results
     //                 vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
 	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
@@ -286,6 +291,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vnmsac.vx v24, a6, v8
 	vmsge.vx v0, v24, a6
 	vsub.vx v24, v24, a6, v0.t
+    //             }
+    //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+	vse32.v	v24, (even_coeffs_addr)
 
 	// Barrett's reduction of v16 / vec_odd_results
 	vmulh.vx v8, v16, t2
@@ -293,9 +301,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vmsge.vx v0, v16, a6
 	vsub.vx v16, v16, a6, v0.t
 #endif
-    //             }
-    //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
-	vse32.v	v24, (even_coeffs_addr)
     //             FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
 	vse32.v	v16, (odd_coeffs_addr)
 
