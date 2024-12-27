@@ -62,8 +62,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t0: current address of destination buffer
 //   t1: q
 //   t4: 2^32 // q
-.loop_reconstruct_level_6_5_4_3_2:
 	vsetvli	a7, a3, e32, m8, ta, mu
+.loop_reconstruct_level_6_5_4_3_2:
 	// loading indices
 	vle32.v	v8, (a5)
 	// performing permutation
@@ -172,7 +172,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vadd.vv v8, v8, v20
 
 	// assume t1 == 3329 (q) and t4 == 1290167 (2^32 // q)
-	vsetvli	a6, x0, e32, m8, ta, ma
+	vsetvli	a7, a3, e32, m8, ta, ma
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
