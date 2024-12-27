@@ -23,9 +23,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li t0, 0xcc
 	vmv.v.x v2, t0
 
-	li t0, 0xf0
-	vmv.v.x v3, t0
-
 	mv	a3, a2 // a3 <- avl
 	ld	t0, 8(a0) // t0 <- destination buffer
 
@@ -35,9 +32,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	li t3, (4 * 64 * 4)
 	add t3, a4, t3 // t3 <- rootPowers[4]
+	vl1re32.v v3, (t3) // twiddle factors for level 4
 
 	li t5, (3 * 64 * 4)
 	add t5, a4, t5 // t5 <- rootPowers[3]
+	vl2re32.v v4, (t5) // twiddle factors for level 3
 
 	li t6, (2 * 64 * 4)
 	add t6, a4, t6 // t6 <- rootPowers[2]
@@ -96,12 +95,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// here we assume VLEN=128 and perform the coefficient group swap directly
 	// by using register indexing
 	vsetvli	a6, x0, e32, m1, ta, ma
-	vle32.v v24, (t3) // loading twiddleFactor
 	// explicit 4-element swap assuming VLEN=128
-	vmul.vv v17, v9, v24
-	vmul.vv v19, v11, v24
-	vmul.vv v21, v13, v24
-	vmul.vv v23, v15, v24
+	vmul.vv v17, v9, v3
+	vmul.vv v19, v11, v3
+	vmul.vv v21, v13, v3
+	vmul.vv v23, v15, v3
 
 	vsub.vv v9, v8, v17
 	vadd.vv v8, v8, v17
@@ -132,10 +130,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// butterfly
 	// a single 8-element group of twiddle factor is required
 	vsetvli	a6, x0, e32, m2, ta, ma
-	vle32.v v24, (t5) // loading twiddleFactor
 
-	vmul.vv v18, v10, v24
-	vmul.vv v22, v14, v24
+	vmul.vv v18, v10, v4
+	vmul.vv v22, v14, v4
 
 	vsub.vv v10, v8, v18
 	vadd.vv v8, v8, v18
