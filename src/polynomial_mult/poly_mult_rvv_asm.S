@@ -156,20 +156,34 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vmul.vv v22, v14, v4
 
 	vsub.vv v10, v8, v18
+	vmulh.vx v18, v10, t4
+	vnmsac.vx v10, t1, v18
+	vmsge.vx v0, v10, t1
+	vsub.vx v10, v10, t1, v0.t
+
 	vadd.vv v8, v8, v18
-
-	vsub.vv v14, v12, v22
-	vadd.vv v12, v12, v22
-
-	vsetvli	a6, x0, e32, m8, ta, mu
-	// assume t1 == 3329 (q) and t4 == 1290167 (2^32 // q)
-#ifdef USE_VREM_MODULO
-	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
-#else
 	vmulh.vx v16, v8, t4
 	vnmsac.vx v8, t1, v16
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
+
+	vsub.vv v14, v12, v22
+	vmulh.vx v22, v14, t4
+	vnmsac.vx v14, t1, v22
+	vmsge.vx v0, v14, t1
+	vsub.vx v14, v14, t1, v0.t
+
+	vadd.vv v12, v12, v22
+	vmulh.vx v20, v12, t4
+	vnmsac.vx v12, t1, v20
+	vmsge.vx v0, v12, t1
+	vsub.vx v12, v12, t1, v0.t
+
+	// assume t1 == 3329 (q) and t4 == 1290167 (2^32 // q)
+#ifdef USE_VREM_MODULO
+	vsetvli	a6, x0, e32, m8, ta, mu
+	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
+#else
 #endif
 
 	// level 2 // butterfly
