@@ -976,15 +976,10 @@ void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs
     rvv_ntt_transform_asm_internal(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
     rvv_ntt_transform_asm_internal(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
 
-    // element-size multiplication using RVV
-    // rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
+    // element-size multiplication anddivision by the degree
     rvv_ntt_mult_scale_asm(ntt_lhs_times_rhs.coeffs, ntt_lhs.coeffs, ntt_lhs_times_rhs.coeffs);
 
     rvv_ntt_transform_asm_internal(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
-
-    // division by the degree
-    // dst->degree = lhs.degree;
-    // rvv_ntt_degree_scaling(dst, ring);
 
     free(ntt_lhs.coeffs);
     free(ntt_lhs_times_rhs.coeffs);
