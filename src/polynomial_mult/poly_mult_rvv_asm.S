@@ -51,18 +51,23 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// one is only used when Barrett's method is used)
 	li t1, 3329 // should be hoisted outside the loop
 #ifndef USE_VREM_MODULO
-	// t4 <- 1290167 = 2^32 / a(was 5039 = 2^24 / q)
+	// t4 <- 1290167 = 2^32 / q (was 5039 = 2^24 / q)
 	li t4, 1290167
 #endif
 
 // reconstruction level 6, 5, 4, 3 and 2
 // register mapping in this loop
-//   a5: current address of index buffer
 //   a1: start index of input coefficient buffer
+//   a3: avl
+//   a5: current address of index buffer
+//   a7: vl
+//
 //   t0: current address of destination buffer
 //   t1: q
+//   t2: current address of twiddle factor for level 5
 //   t4: 2^32 // q
 	vsetvli	a7, a3, e32, m8, ta, mu
+	slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
 .loop_reconstruct_level_6_5_4_3_2:
 	// loading indices
 	vle32.v	v8, (a5)
@@ -184,10 +189,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// storing results
 	vse32.v	v8, (t0)
-	sub	a3, a3, a7
-	slli	a7, a7, 2
-	add	t0, t0, a7
-	add	a5, a5, a7
+
+	// updating addresses and loop counter
+	addi	a3, a3, -32
+	add	t0, t0, t6
+	add	a5, a5, t6
 	bnez	a3, .loop_reconstruct_level_6_5_4_3_2
 
 // 
