@@ -52,6 +52,7 @@ $(BUILD_DIR)/poly_mult_ntt.o: poly_mult_ntt.c
 $(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/poly_mult_rvv_asm.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCC) $(EXTRA_CFLAGS) -I./ -O2 -march=rv64gcv $^ -lm -o $@
+	$(OBJDUMP) -d $@ > $@.dump
 
 $(BUILD_DIR)/basic_poly_test: basic_poly_test.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/ntt_scalar.o
 	mkdir -p $(BUILD_DIR)
