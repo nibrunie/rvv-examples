@@ -754,22 +754,6 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
     }
 }
 
-extern void rvv_ntt_transform_asm_internal(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
-/** Compute n-element NTT, assuming level @p level
- *  WARNING: non-indexed variant is destructive as coeffs is used as a temporary buffer and overwritten
- *
- * @param[out] dst destination buffer for NTT transform result
- * @param[in] inputs coefficients (must contain @p n elements)
- * @param n number of coefficients
- * @param level NTT level (start from 0)
- * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
-*/
-void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]) {
-    assert(_n > 1);
-    rvv_ntt_transform_asm_internal(dst, coeffs, _n, level, rootPowers);
-}
-
-
 
 void rvv_ntt_transform(ntt_t* dst, int* coeffs, ring_t ring, int degree, int rootOfUnity) {
     const int n = degree + 1;
@@ -963,8 +947,19 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
     free(ntt_lhs_times_rhs.coeffs);
 }
 
-// defined in poly_mult_rvv_asm.S
-extern void rvv_ntt_transform_asm_helper(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
+
+/** Compute n-element NTT, assuming level @p level
+ * defined in poly_mult_rvv_asm.S
+ *  WARNING: non-indexed variant is destructive as coeffs is used as a temporary buffer and overwritten
+ *
+ * @param[out] dst destination buffer for NTT transform result
+ * @param[in] inputs coefficients (must contain @p n elements)
+ * @param n number of coefficients
+ * @param level NTT level (start from 0)
+ * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
+*/
+extern void rvv_ntt_transform_asm_internal(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
+
 
 void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     // FIXME: ring structure should be a function argument
@@ -976,13 +971,13 @@ void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
 
-    rvv_ntt_transform_asm_helper(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
-    rvv_ntt_transform_asm_helper(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
+    rvv_ntt_transform_asm_internal(&ntt_lhs, lhs.coeffs, lhs.degree + 1, 0, ringPowers[0]);
+    rvv_ntt_transform_asm_internal(&ntt_lhs_times_rhs, rhs.coeffs, rhs.degree + 1, 0, ringPowers[0]);
 
     // element-size multiplication using RVV
     rvv_ntt_mul(&ntt_lhs_times_rhs, ntt_lhs, ntt_lhs_times_rhs);
 
-    rvv_ntt_transform_asm_helper(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
+    rvv_ntt_transform_asm_internal(dst, ntt_lhs_times_rhs.coeffs, lhs.degree + 1, 0, ringInvPowers[0]);
 
     // division by the degree
     dst->degree = lhs.degree;
