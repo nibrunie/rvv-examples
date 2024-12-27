@@ -54,7 +54,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsetvli	a7, a3, e32, m8, ta, mu
 	// loading indices
 	vle32.v	v8, (a5)
-	// performning permutation
+	// performing permutation
 	vluxei32.v	v8, (a1), v8
 
 	// level 6
@@ -98,16 +98,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// level 4
 	// butterfly
-    // swapping odd/even pairs of coefficients
 	// a single 4-element group of twiddle factor is required
+	// here we assume VLEN=128 and perform the coefficient group swap directly
+	// by using register indexing
 	vsetvli	a6, x0, e32, m1, ta, ma
 	vle32.v v24, (t3) // loading twiddleFactor
-    // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-	// vmul.vv v, v8, v24, v0.t
-    // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
-	# vslidedown.vi v16, v8, 4
-    // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
-	# vslideup.vi v16, v8, 4, v0.t
 	// explicit 4-element swap assuming VLEN=128
 	vmul.vv v17, v9, v24
 	vmul.vv v19, v11, v24
@@ -192,7 +187,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// assume t1 == 3329 and t4 == 5039
 #ifdef USE_VREM_MODULO
-	vsetvli	a6, x0, e32, m8, ta, mu
+	vsetvli	a6, x0, e32, m8, ta, ma
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
 	vwmul.vx v24, v8, t4
@@ -213,8 +208,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	slli	a7, a7, 2
 	add	t0, t0, a7
 	add	a5, a5, a7
-	// add t2, t2, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
-	// add t3, t3, a7 //  <= rootPowers address increment should not be done (each row only contains 64-element)
 	bnez	a3, .loop_reconstruct_level_6_5_4_3_2
 
 // 
