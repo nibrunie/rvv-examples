@@ -56,6 +56,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vle32.v	v8, (a5)
 	// performning permutation
 	vluxei32.v	v8, (a1), v8
+
+	// level 6
 	// computing swapped elements
 	vslidedown.vi v16, v8, 1
 	vmv1r.v v0, v1 // v0 <- v1 (0xaa mask)
@@ -63,7 +65,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vrsub.vi v8, v8, 0, v0.t // negate
 	vadd.vv v8, v16, v8
 
-	// butterfly
+	// level 5 butterfly
     // swapping odd/even pairs of coefficients
 	vle32.v v24, (t2) // loading twiddleFactor
 	vmv1r.v v0, v2
@@ -84,18 +86,17 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsetvli	a6, x0, e32, m4, ta, mu
 	vwmul.vx v24, v8, t4
 	vnsra.wi v24, v24, 24
-	vnmsac.vx v8, t1, v24
 
 	vwmul.vx v16, v12, t4
-	vnsra.wi v16, v16, 24
-	vnmsac.vx v12, t1, v16
+	vnsra.wi v28, v16, 24
+
 	vsetvli	a6, x0, e32, m8, ta, mu
+	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
 
 	// level 4
-
 	// butterfly
     // swapping odd/even pairs of coefficients
 	// a single 4-element group of twiddle factor is required
@@ -134,16 +135,14 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsetvli	a6, x0, e32, m4, ta, mu
 	vwmul.vx v24, v8, t4
 	vnsra.wi v24, v24, 24
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v28, v16, 24
+
+	vsetvli	a6, x0, e32, m8, ta, mu
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v16, v16, 24
-	vnmsac.vx v12, t1, v16
-	vmsge.vx v0, v12, t1
-	vsub.vx v12, v12, t1, v0.t
-	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
 
@@ -170,16 +169,14 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsetvli	a6, x0, e32, m4, ta, mu
 	vwmul.vx v24, v8, t4
 	vnsra.wi v24, v24, 24
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v28, v16, 24
+
+	vsetvli	a6, x0, e32, m8, ta, mu
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v16, v16, 24
-	vnmsac.vx v12, t1, v16
-	vmsge.vx v0, v12, t1
-	vsub.vx v12, v12, t1, v0.t
-	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
 	// level 2
@@ -200,16 +197,14 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
 	vwmul.vx v24, v8, t4
 	vnsra.wi v24, v24, 24
+
+	vwmul.vx v16, v12, t4
+	vnsra.wi v28, v16, 24
+
+	vsetvli	a6, x0, e32, m8, ta, mu
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v16, v16, 24
-	vnmsac.vx v12, t1, v16
-	vmsge.vx v0, v12, t1
-	vsub.vx v12, v12, t1, v0.t
-	vsetvli	a6, x0, e32, m8, ta, mu
 #endif
 
 	// storing results
@@ -284,10 +279,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vle32.v	v16, (odd_coeffs_addr)
     //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
 	vle32.v	v24, (t4)
-    //             TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
-	vmul.vv v16, v16, v24
     //             TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
 	vle32.v	v8, (even_coeffs_addr)
+    //             TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
+	vmul.vv v16, v16, v24
     //             TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
 	vadd.vv v24, v8, v16
     //             vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
