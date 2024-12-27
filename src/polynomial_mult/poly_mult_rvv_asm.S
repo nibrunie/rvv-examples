@@ -46,7 +46,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// one is only used when Barrett's method is used)
 	li t1, 3329 // should be hoisted outside the loop
 #ifndef USE_VREM_MODULO
-	li t4, 5039
+	// t4 <- 1290167 = 2^32 / a(was 5039 = 2^24 / q)
+	li t4, 1290167
 #endif
 
 // reconstruction level 6, 5, 4, 3 and 2
@@ -83,14 +84,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vsetvli	a6, x0, e32, m4, ta, mu
-	vwmul.vx v24, v8, t4
-	vnsra.wi v24, v24, 24
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v28, v16, 24
-
-	vsetvli	a6, x0, e32, m8, ta, mu
+	vmulh.vx v24, v8, t4
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
@@ -122,19 +116,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vadd.vv v14, v14, v23
 
 
-	// assume t1 == 3329 and t4 == 5039
-#ifdef USE_VREM_MODULO
 	vsetvli	a6, x0, e32, m8, ta, mu
+	// assume t1 == 3329 and t4 == 1290167
+#ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vsetvli	a6, x0, e32, m4, ta, mu
-	vwmul.vx v24, v8, t4
-	vnsra.wi v24, v24, 24
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v28, v16, 24
-
-	vsetvli	a6, x0, e32, m8, ta, mu
+	vmulh.vx v24, v8, t4
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
@@ -156,19 +143,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsub.vv v14, v12, v22
 	vadd.vv v12, v12, v22
 
-	// assume t1 == 3329 and t4 == 5039
-#ifdef USE_VREM_MODULO
 	vsetvli	a6, x0, e32, m8, ta, mu
+	// assume t1 == 3329 and t4 == 1290167
+#ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vsetvli	a6, x0, e32, m4, ta, mu
-	vwmul.vx v24, v8, t4
-	vnsra.wi v24, v24, 24
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v28, v16, 24
-
-	vsetvli	a6, x0, e32, m8, ta, mu
+	vmulh.vx v24, v8, t4
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
@@ -185,18 +165,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vsub.vv v12, v8, v20
 	vadd.vv v8, v8, v20
 
-	// assume t1 == 3329 and t4 == 5039
-#ifdef USE_VREM_MODULO
+	// assume t1 == 3329 and t4 == 1290167
 	vsetvli	a6, x0, e32, m8, ta, ma
+#ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vwmul.vx v24, v8, t4
-	vnsra.wi v24, v24, 24
-
-	vwmul.vx v16, v12, t4
-	vnsra.wi v28, v16, 24
-
-	vsetvli	a6, x0, e32, m8, ta, mu
+	vmulh.vx v24, v8, t4
 	vnmsac.vx v8, t1, v24
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
@@ -260,8 +234,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	//
 	// q (used for modulo reduction)
 	li a6, 3329
-	// 2^24 / q
-	li t2, 5039
+	// t2 <- 1290167 = 2^32 / a(was 5039 = 2^24 / q)
+	li t2, 1290167
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
 .ntt_level_avl_loop:
@@ -292,27 +266,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //                 vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
     //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
 	// Barrett's reduction of v24 / vec_even_results
-	// TODO: maximum of LMUL=4 (because widening requires EMUL=8), could
-	// be optmized with vl/LMUL change
-	vsetivli	x0, 16, e32, m4, ta, ma
-	vwmul.vx v8, v24, t2
-	vnsra.wi v8, v8, 24
-	vwmul.vx v0, v28, t2
-	vnsra.wi v12, v0, 24
-
-	vsetvli	a7, x0, e32, m8, ta, ma
+	vmulh.vx v8, v24, t2
 	vnmsac.vx v24, a6, v8
 	vmsge.vx v0, v24, a6
 	vsub.vx v24, v24, a6, v0.t
 
-	vsetivli	x0, 16, e32, m4, ta, ma
 	// Barrett's reduction of v16 / vec_odd_results
-	vwmul.vx v8, v16, t2
-	vnsra.wi v8, v8, 24
-	vwmul.vx v0, v20, t2
-	vnsra.wi v12, v0, 24
-
-	vsetvli	a7, x0, e32, m8, ta, ma
+	vmulh.vx v8, v16, t2
 	vnmsac.vx v16, a6, v8
 	vmsge.vx v0, v16, a6
 	vsub.vx v16, v16, a6, v0.t
@@ -358,8 +318,8 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
 	li a3, 128 // a3 = avl = 128
 	// q (used for modulo reduction)
 	li a6, 3329
-	// 2^24 / q
-	li t2, 5039
+	// t2 <- 1290167 = 2^32 / a(was 5039 = 2^24 / q)
+	li t2, 1290167
 	// 1 / n mod q
 	li t3, 3303
 .rvv_ntt_mult_scale_avl_loop:
@@ -376,14 +336,8 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
 #else
-	vsetivli	x0, 16, e32, m4, ta, ma
-	// Barrett's reduction of v16 / vec_odd_results
-	vwmul.vx v8, v16, t2
-	vnsra.wi v8, v8, 24
-	vwmul.vx v0, v20, t2
-	vnsra.wi v12, v0, 24
-
-	vsetvli	a7, x0, e32, m8, ta, ma
+	// Barrett's reduction of v16 vector register group
+	vmulh.vx v8, v16, t2
 	vnmsac.vx v16, a6, v8
 	vmsge.vx v0, v16, a6
 	vsub.vx v16, v16, a6, v0.t
@@ -396,14 +350,8 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
 #else
-	vsetivli	x0, 16, e32, m4, ta, ma
-	// Barrett's reduction of v16 / vec_odd_results
-	vwmul.vx v8, v16, t2
-	vnsra.wi v8, v8, 24
-	vwmul.vx v0, v20, t2
-	vnsra.wi v12, v0, 24
-
-	vsetvli	a7, x0, e32, m8, ta, ma
+	// Barrett's reduction of v16 vector register group
+	vmulh.vx v8, v16, t2
 	vnmsac.vx v16, a6, v8
 	vmsge.vx v0, v16, a6
 	vsub.vx v16, v16, a6, v0.t
