@@ -43,9 +43,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	add t5, a4, t5 // t5 <- rootPowers[3]
 	vl2re32.v v4, (t5) // twiddle factors for level 3
 
-	li t6, (2 * 64 * 4)
-	add t6, a4, t6 // t6 <- rootPowers[2]
-	vl4re32.v v24, (t6) // twiddle factors for level 2
+	li t5, (2 * 64 * 4)
+	add t5, a4, t5 // t6 <- rootPowers[2]
 
 	// hoisting constants used for modulo reduction (the second
 	// one is only used when Barrett's method is used)
@@ -66,8 +65,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t1: q
 //   t2: current address of twiddle factor for level 5
 //   t4: 2^32 // q
+//   t6: sizeof(int) * vl => byte address increment update
 	vsetvli	a7, a3, e32, m8, ta, mu
 	slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
+
+	vmv.v.i v24, 1
+	vmv1r.v v0, v2
+	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
 .loop_reconstruct_level_6_5_4_3_2:
 	// loading indices
 	vle32.v	v8, (a5)
@@ -84,10 +88,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// level 5 butterfly
     // swapping odd/even pairs of coefficients
-	vle32.v v16, (t2) // loading twiddleFactor
 	vmv1r.v v0, v2
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-	vmul.vv v8, v8, v16, v0.t
+	vmul.vv v8, v8, v24
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
 	vslidedown.vi v16, v8, 2
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
@@ -171,7 +174,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// a single 16-element group of twiddle factor is required (assumed to be present in v24)
 	vsetvli	a6, x0, e32, m4, ta, ma
 
-	vmul.vv v20, v12, v24
+	vl4re32.v v16, (t5) // twiddle factors for level 2
+	vmul.vv v20, v12, v16
 
 	vsub.vv v12, v8, v20
 	vadd.vv v8, v8, v20
