@@ -15,7 +15,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a3)
 	mv	a3, a2
 
-// building mask
+// building mask and twiddle factors
+    // v1: mask for level 6
+	// v2: mask for level 5
+	// v3: twiddle factors for level 4
+	// v4v5: twiddle factors for level 3
+	// v24v25v26v27: twiddle factors for level 2
 	li t0, 0xaa
 	vsetvli	a6, zero, e8, m1, ta, ma
 	vmv.v.x v1, t0
@@ -40,6 +45,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	li t6, (2 * 64 * 4)
 	add t6, a4, t6 // t6 <- rootPowers[2]
+	vl4re32.v v24, (t6) // twiddle factors for level 2
 
 	// hoisting constants used for modulo reduction (the second
 	// one is only used when Barrett's method is used)
@@ -67,10 +73,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
 	// level 5 butterfly
     // swapping odd/even pairs of coefficients
-	vle32.v v24, (t2) // loading twiddleFactor
+	vle32.v v16, (t2) // loading twiddleFactor
 	vmv1r.v v0, v2
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
-	vmul.vv v8, v8, v24, v0.t
+	vmul.vv v8, v8, v16, v0.t
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
 	vslidedown.vi v16, v8, 2
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
@@ -83,8 +89,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vmulh.vx v24, v8, t4
-	vnmsac.vx v8, t1, v24
+	vmulh.vx v16, v8, t4
+	vnmsac.vx v8, t1, v16
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
@@ -119,8 +125,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vmulh.vx v24, v8, t4
-	vnmsac.vx v8, t1, v24
+	vmulh.vx v16, v8, t4
+	vnmsac.vx v8, t1, v16
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
@@ -145,8 +151,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vmulh.vx v24, v8, t4
-	vnmsac.vx v8, t1, v24
+	vmulh.vx v16, v8, t4
+	vnmsac.vx v8, t1, v16
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
@@ -155,7 +161,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	// butterfly
 	// a single 16-element group of twiddle factor is required
 	vsetvli	a6, x0, e32, m4, ta, ma
-	vle32.v v24, (t6) // loading twiddleFactor
 
 	vmul.vv v20, v12, v24
 
@@ -167,8 +172,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifdef USE_VREM_MODULO
 	vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
-	vmulh.vx v24, v8, t4
-	vnmsac.vx v8, t1, v24
+	vmulh.vx v16, v8, t4
+	vnmsac.vx v8, t1, v16
 	vmsge.vx v0, v8, t1
 	vsub.vx v8, v8, t1, v0.t
 #endif
