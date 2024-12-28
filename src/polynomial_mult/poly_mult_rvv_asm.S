@@ -12,11 +12,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li	a3, 128	// a3 = avl = 128
 
 // building mask and twiddle factors
-    // v1: mask for level 6
-    // v2: mask for level 5
-    // v3: twiddle factors for level 4
-    // v4v5: twiddle factors for level 3
-    // v24v25v26v27: twiddle factors for level 2
+    // static allocation of vector registers (invariant in loop)
+    //   v1: mask for level 6
+    //   v2: mask for level 5
+    //   v3: twiddle factors for level 4
+    //   v4v5: twiddle factors for level 3
+    //   v24v25v26v27v28v29v30v31: twiddle factors for level 5
     li t0, 0xaa
     vsetvli    a6, zero, e8, m1, ta, ma
     vmv.v.x v1, t0
@@ -30,13 +31,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vsetvli    a7, a3, e32, m8, ta, mu
     slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
 
-	// int rootPowers[8][64]
+    // computing addresses for rootPowers (load from int rootPowers[8][64])
+    // + pre-loading some vector register groups
 	li t2, (5 * 64 * 4)
 	add t2, a2, t2 // t2 <- rootPowers[5]
 	vmv.v.i v24, 1
 	vmv1r.v v0, v2
 	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
-
 
 
 	li t3, (4 * 64 * 4)
@@ -194,8 +195,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     // updating addresses and loop counter
     addi    a3, a3, -32
-    add    a5, a5, t6
-    add    t0, t0, t6
+    add     a5, a5, t6
+    add     t0, t0, t6
     bnez    a3, .loop_reconstruct_level_6_5_4_3_2
 
 // 
@@ -302,9 +303,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vse32.v    v16, (odd_coeffs_addr)
 
     addi    a3, a3, -32
-    add    even_coeffs_addr, even_coeffs_addr, t0
-    add odd_coeffs_addr, odd_coeffs_addr, t0
-    add t4, t4, t0 // twiddle_factors += vl
+    add     even_coeffs_addr, even_coeffs_addr, t0
+    add     odd_coeffs_addr, odd_coeffs_addr, t0
+    add     t4, t4, t0 // twiddle_factors += vl
     bnez    a3, .ntt_level_avl_loop
     //         }
     addi a5, a5, 1 // j++
