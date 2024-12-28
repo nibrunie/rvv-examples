@@ -225,6 +225,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // a7 <- 1290167 = 2^32 / q (was 5039 = 2^24 / q)
     li a7, 1290167
 
+    // constant for address update
+    li t0, 128 // sizeof(int) * vl => byte address increment update
     // for (; local_level >= 0; n = 2 * n, local_level--) {
 .ntt_level:
     // int j = 0
@@ -254,7 +256,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         {
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
     vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
-    li t0, 128 // sizeof(int) * vl => byte address increment update
 .ntt_level_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
     vle32.v    v16, (odd_coeffs_addr)
@@ -377,9 +378,9 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     vse32.v    v16, (a0)
 
     addi    a3, a3, -32
-    add a0, a0, t0 // updating destination address
-    add    a1, a1, t0 // updating lhs address
-    add a2, a2, t0 // updating rhs address
+    add     a0, a0, t0 // updating destination address
+    add     a1, a1, t0 // updating lhs address
+    add     a2, a2, t0 // updating rhs address
     bnez    a3, .rvv_ntt_mult_scale_avl_loop
 .rvv_ntt_mult_scale_asm_end:
     ret
