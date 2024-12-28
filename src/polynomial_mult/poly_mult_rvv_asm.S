@@ -33,21 +33,23 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     // computing addresses for rootPowers (load from int rootPowers[8][64])
     // + pre-loading some vector register groups
+
+    // for level 2
+	li t5, (2 * 64 * 4)
+	add t5, a2, t5 // t6 <- rootPowers[2]
+    vl4re32.v v4, (t5) // twiddle factors for level 2
+
+    // for level 4
+	li t3, (4 * 64 * 4)
+	add t3, a2, t3 // t3 <- rootPowers[4]
+	vl1re32.v v3, (t3) // twiddle factors for level 4
+
+    // for level 5
 	li t2, (5 * 64 * 4)
 	add t2, a2, t2 // t2 <- rootPowers[5]
 	vmv.v.i v24, 1
 	vmv1r.v v0, v2
 	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
-
-
-	li t3, (4 * 64 * 4)
-	add t3, a2, t3 // t3 <- rootPowers[4]
-	vl1re32.v v3, (t3) // twiddle factors for level 4
-
-
-	li t5, (2 * 64 * 4)
-	add t5, a2, t5 // t6 <- rootPowers[2]
-    vl4re32.v v4, (t5) // twiddle factors for level 2
 
     // last address computation since we need t5 to keep the address of rootPowers[2]
 	li t5, (3 * 64 * 4)
