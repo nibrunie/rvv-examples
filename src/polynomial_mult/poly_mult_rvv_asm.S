@@ -16,7 +16,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //   v1: mask for level 6
     //   v2: mask for level 5
     //   v3: twiddle factors for level 4
-    //   v4v5: twiddle factors for level 3
+    //   v4v5v6v7: twiddle factors for level 2
     //   v24v25v26v27v28v29v30v31: twiddle factors for level 5
     li t0, 0xaa
     vsetvli    a6, zero, e8, m1, ta, ma
@@ -44,12 +44,14 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	add t3, a2, t3 // t3 <- rootPowers[4]
 	vl1re32.v v3, (t3) // twiddle factors for level 4
 
-	li t5, (3 * 64 * 4)
-	add t5, a2, t5 // t5 <- rootPowers[3]
-	vl2re32.v v4, (t5) // twiddle factors for level 3
 
 	li t5, (2 * 64 * 4)
 	add t5, a2, t5 // t6 <- rootPowers[2]
+    vl4re32.v v4, (t5) // twiddle factors for level 2
+
+    // last address computation since we need t5 to keep the address of rootPowers[2]
+	li t5, (3 * 64 * 4)
+	add t5, a2, t5 // t5 <- rootPowers[3]
 
     // hoisting constants used for modulo reduction (the second
     // one is only used when Barrett's method is used)
@@ -137,10 +139,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // assume t1 == 3329 and t4 == 1290167
 #ifdef USE_VREM_MODULO
     vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
+	vl2re32.v v16, (t5) // twiddle factors for level 3
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
     vmsge.vx v0, v8, t1
+	vl2re32.v v16, (t5) // twiddle factors for level 3
     vsub.vx v8, v8, t1, v0.t
 #endif
 
@@ -149,8 +153,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // a single 8-element group of twiddle factor is required (assumed to be present in v4)
     vsetvli    a6, x0, e32, m2, ta, ma
 
-    vmul.vv v18, v10, v4
-    vmul.vv v22, v14, v4
+    vmul.vv v18, v10, v16
+    vmul.vv v22, v14, v16
 
     vsub.vv v10, v8, v18
     vadd.vv v8, v8, v18
@@ -173,8 +177,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // a single 16-element group of twiddle factor is required (assumed to be present in v24)
     vsetvli    a6, x0, e32, m4, ta, ma
 
-    vl4re32.v v16, (t5) // twiddle factors for level 2
-    vmul.vv v20, v12, v16
+    vmul.vv v20, v12, v4
 
     vsub.vv v12, v8, v20
     vadd.vv v8, v8, v20
