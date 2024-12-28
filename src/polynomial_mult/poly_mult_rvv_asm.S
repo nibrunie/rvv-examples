@@ -1,19 +1,15 @@
-// void rvv_ntt_transform_asm_internal(ntt_t* dst, int* coeffs, int _n, int level, int rootPowers[8][64]); 
+// void rvv_ntt_transform_asm_internal(int* dst, int* coeffs, int rootPowers[8][64]); 
 // a0: destination buffer
 // a1: input buffer
-// a2: number of elements (should be 128)
-// a3: level (should be )
-// a4: address for root powers 2D array
-.globl    rvv_ntt_transform_asm_internal # -- Begin function rvv_ntt_transform_asm_internal
-    .p2align    1
-    .type    rvv_ntt_transform_asm_internal,@function
+// a2: address for root powers 2D array
+.globl	rvv_ntt_transform_asm_internal # -- Begin function rvv_ntt_transform_asm_internal
+	.p2align	1
+	.type	rvv_ntt_transform_asm_internal,@function
 rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
-    ld    t0, 8(a0)
-# %bb.1:                                # %.lr.ph.preheader
 .Lpcrel_hi3:
-    auipc    a3, %got_pcrel_hi(ntt_coeff_indices_128)
-    ld    a5, %pcrel_lo(.Lpcrel_hi3)(a3)
-    mv    a3, a2
+	auipc	a3, %got_pcrel_hi(ntt_coeff_indices_128)
+	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a3)
+	li	a3, 128	// a3 = avl = 128
 
 // building mask and twiddle factors
     // v1: mask for level 6
@@ -28,31 +24,31 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     li t0, 0xcc
     vmv.v.x v2, t0
 
-    mv    a3, a2 // a3 <- avl
-    ld    t0, 8(a0) // t0 <- destination buffer
+	li	a3, 128 // a3 <- avl
+	mv	t0, a0 // t0 <- destination buffer
 
     vsetvli    a7, a3, e32, m8, ta, mu
     slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
 
-    // int rootPowers[8][64]
-    li t2, (5 * 64 * 4)
-    add t2, a4, t2 // t2 <- rootPowers[5]
-    vmv.v.i v24, 1
-    vmv1r.v v0, v2
-    vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
+	// int rootPowers[8][64]
+	li t2, (5 * 64 * 4)
+	add t2, a2, t2 // t2 <- rootPowers[5]
+	vmv.v.i v24, 1
+	vmv1r.v v0, v2
+	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
 
 
 
-    li t3, (4 * 64 * 4)
-    add t3, a4, t3 // t3 <- rootPowers[4]
-    vl1re32.v v3, (t3) // twiddle factors for level 4
+	li t3, (4 * 64 * 4)
+	add t3, a2, t3 // t3 <- rootPowers[4]
+	vl1re32.v v3, (t3) // twiddle factors for level 4
 
-    li t5, (3 * 64 * 4)
-    add t5, a4, t5 // t5 <- rootPowers[3]
-    vl2re32.v v4, (t5) // twiddle factors for level 3
+	li t5, (3 * 64 * 4)
+	add t5, a2, t5 // t5 <- rootPowers[3]
+	vl2re32.v v4, (t5) // twiddle factors for level 3
 
-    li t5, (2 * 64 * 4)
-    add t5, a4, t5 // t6 <- rootPowers[2]
+	li t5, (2 * 64 * 4)
+	add t5, a2, t5 // t6 <- rootPowers[2]
 
     // hoisting constants used for modulo reduction (the second
     // one is only used when Barrett's method is used)
@@ -237,21 +233,22 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-    srli a3, t6, 1 // a3 <= avl = half_n
-    // 
-    // t3 <- coeffs_a
-    ld    even_coeffs_addr, 8(a0)
-    // 
+	srli a3, t6, 1 // a3 <= avl = half_n
+	// 
+	// t3 <- coeffs_a
+	mv	even_coeffs_addr, a0
+	// 
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
-    mul t2, a5, t6 // 2 * j * half_n = j * n
-    sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs = coeffs_a + sizeof(int)=4 * 2 * j * half_n
-    // 
+	mul t2, a5, t6 // 2 * j * half_n = j * n
+	// sll a7, a7, 2 // sizeof(int)=4 * 2 * j * half_n
+	sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs
+	// 
     //         int* odd_coeffs = even_coeffs + half_n;
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     //         int* twiddleFactor = rootPowers[local_level];
     li twiddle_factors_addr, (64 * 4)
     mul twiddle_factors_addr, twiddle_factors_addr, t5 
-    add twiddle_factors_addr, a4, twiddle_factors_addr // t4 <- rootPowers[local_level]
+    add twiddle_factors_addr, a2, twiddle_factors_addr // t4 <- rootPowers[local_level]
     //
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
