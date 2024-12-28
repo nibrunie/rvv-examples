@@ -244,12 +244,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // 
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
     mul t2, a5, t6 // 2 * j * half_n = j * n
-    sll t2, t2, 2 // sizeof(int)=4 * 2 * j * half_n
-    add even_coeffs_addr, even_coeffs_addr, t2 // t3 <- even_coeffs
+    sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs = coeffs_a + sizeof(int)=4 * 2 * j * half_n
     // 
     //         int* odd_coeffs = even_coeffs + half_n;
-    slli t2, t6, 1 // sizeof(int) * half_n = 4 * n / 2 = 2 *n
-    add odd_coeffs_addr, even_coeffs_addr, t2 // t1 <- odd_coeffs
+    sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     //         int* twiddleFactor = rootPowers[local_level];
     li twiddle_factors_addr, (64 * 4)
     mul twiddle_factors_addr, twiddle_factors_addr, t5 
