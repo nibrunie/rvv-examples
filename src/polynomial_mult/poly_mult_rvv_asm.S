@@ -345,7 +345,10 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     li t2, 1290167
     // 1 / n mod q (for degree scaling)
     li t3, 3303
-    vsetvli    a7, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
+    // (1 / n % q) * 2^32 / q
+    li t4, 4261422943
+
+    vsetvli    a7, a3, e32, m8, ta, mu // setting outside the loop since vl should be uniform for all iterations
     li t0, 128 // sizeof(int) * vl => byte address increment update
 .rvv_ntt_mult_scale_avl_loop:
     // loading lhs coefficients
@@ -368,20 +371,20 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
 #endif
 
     // degree scaling
-    vmul.vx v16, v16, t3
+    vmul.vx v24, v16, t3
 
     // modulo reduction for element wise multiplication
 #ifdef USE_VREM_MODULO
-    vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
+    vrem.vx v16, v24, a6 // to be replaced by Barrett's reduction
 #else
     // Barrett's reduction of v16 vector register group
-    vmulh.vx v8, v16, t2
-    vnmsac.vx v16, a6, v8
-    vmsge.vx v0, v16, a6
-    vsub.vx v16, v16, a6, v0.t
+    vmulhu.vx v8, v16, t4
+    vnmsac.vx v24, a6, v8
+    vmsge.vx v0, v24, a6
+    vsub.vx v24, v24, a6, v0.t
 #endif
 
-    vse32.v    v16, (a0)
+    vse32.v    v24, (a0)
 
     addi    a3, a3, -32
     add     a0, a0, t0 // updating destination address
