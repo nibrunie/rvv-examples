@@ -108,8 +108,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    // vmsge.vx v0, v8, t1
-    // vsub.vx v8, v8, t1, v0.t
 #endif
 
     // level 4
@@ -145,9 +143,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    //vmsge.vx v0, v8, t1
 	vl2re32.v v16, (t5) // twiddle factors for level 3
-    //vsub.vx v8, v8, t1, v0.t
 #endif
 
 
@@ -171,8 +167,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    // vmsge.vx v0, v8, t1
-    // vsub.vx v8, v8, t1, v0.t
 #endif
 
     // level 2 // butterfly
@@ -191,8 +185,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    vmsge.vx v0, v8, t1
-    vsub.vx v8, v8, t1, v0.t
 #endif
 
     // storing results
@@ -366,8 +358,6 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // Barrett's reduction of v16 vector register group
     vmulh.vx v8, v16, t2
     vnmsac.vx v16, a6, v8
-    vmsge.vx v0, v16, a6
-    vsub.vx v16, v16, a6, v0.t
 #endif
 
     // degree scaling
@@ -384,8 +374,6 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // Barrett's reduction of v16 vector register group
     vmulhu.vx v8, v16, t4
     vnmsac.vx v24, a6, v8
-    vmsge.vx v0, v24, a6
-    vsub.vx v24, v24, a6, v0.t
 #endif
 
     vse32.v    v24, (a0)
