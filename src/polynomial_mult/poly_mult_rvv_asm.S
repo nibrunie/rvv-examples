@@ -108,8 +108,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    vmsge.vx v0, v8, t1
-    vsub.vx v8, v8, t1, v0.t
+    // vmsge.vx v0, v8, t1
+    // vsub.vx v8, v8, t1, v0.t
 #endif
 
     // level 4
@@ -145,9 +145,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    vmsge.vx v0, v8, t1
+    //vmsge.vx v0, v8, t1
 	vl2re32.v v16, (t5) // twiddle factors for level 3
-    vsub.vx v8, v8, t1, v0.t
+    //vsub.vx v8, v8, t1, v0.t
 #endif
 
 
@@ -171,8 +171,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-    vmsge.vx v0, v8, t1
-    vsub.vx v8, v8, t1, v0.t
+    // vmsge.vx v0, v8, t1
+    // vsub.vx v8, v8, t1, v0.t
 #endif
 
     // level 2 // butterfly
@@ -373,7 +373,11 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // degree scaling
     vmul.vx v24, v16, t3
 
-    // modulo reduction for element wise multiplication
+    // modulo reduction for degree scaling
+    // first multiplication uses pre-computed b*2^32 // q = (3303 << 32) / 3329
+    // as in degree scaling, this factor is constant. This does not reduce
+    // the number of instructions but allows to use an instruction which can be
+    // parallelize with the raw degree scaling multiplication above.
 #ifdef USE_VREM_MODULO
     vrem.vx v16, v24, a6 // to be replaced by Barrett's reduction
 #else
