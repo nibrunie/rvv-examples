@@ -230,6 +230,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // int j = 0
     li a5, 0
 
+// level 1
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
@@ -315,7 +316,92 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // }
     addi t5, t5, -1 // local_level --
     sll t6, t6, 1 // n = 2 * n
-    bgez t5, .ntt_level
+
+    // level 0
+    li a5, 0 // j <- 0
+.ntt_level_0_j_loop:
+    //     for (int j = 0; j < m; j++) {
+    //         size_t avl = half_n;
+	srli a3, t6, 1 // a3 <= avl = half_n
+	// 
+	// t3 <- coeffs_a
+	mv	even_coeffs_addr, a0
+	// 
+    //         int* even_coeffs = coeffs_a + 2 * j * half_n;
+	mul t2, a5, t6 // 2 * j * half_n = j * n
+	// sll a7, a7, 2 // sizeof(int)=4 * 2 * j * half_n
+	sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs
+	// 
+    //         int* odd_coeffs = even_coeffs + half_n;
+    sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
+    //         int* twiddleFactor = rootPowers[local_level];
+    li twiddle_factors_addr, (64 * 4)
+    mul twiddle_factors_addr, twiddle_factors_addr, t5 
+    add twiddle_factors_addr, a2, twiddle_factors_addr // t4 <- rootPowers[local_level]
+    //
+    //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
+    //         {
+    //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
+    vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
+.ntt_level_0_avl_loop:
+    //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
+    vle32.v    v16, (odd_coeffs_addr)
+    //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
+    vle32.v    v24, (t4)
+    //             TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
+    vle32.v    v8, (even_coeffs_addr)
+    //             TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
+    vmul.vv v16, v16, v24
+    //             TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
+    vadd.vv v24, v8, v16
+    //             vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
+    vsub.vv v16, v8, v16
+
+#ifdef USE_VREM_MODULO
+    //                 // even results
+    //                 vec_even_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_even_results, dst->modulo, vl);
+    vrem.vx v24, v24, a6 // to be replaced by Barrett's reduction
+    //             }
+    //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+    vse32.v    v24, (even_coeffs_addr)
+    //                 // odd results
+    //                 vec_odd_results = FUNC_LMUL(__riscv_vrem_vx_i32)(vec_odd_results, dst->modulo, vl);
+    vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
+#else
+    //                 vec_odd_results = rvv_barrett_reduction(vec_odd_results, vl);
+    //                 vec_even_results = rvv_barrett_reduction(vec_even_results, vl);
+    // Barrett's reduction of v24 / vec_even_results
+    vmulh.vx v8, v24, a7
+    vnmsac.vx v24, a6, v8
+    vmsge.vx v0, v24, a6
+    vsub.vx v24, v24, a6, v0.t
+    //             }
+    //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
+    vse32.v    v24, (even_coeffs_addr)
+
+    // Barrett's reduction of v16 / vec_odd_results
+    vmulh.vx v8, v16, a7
+    vnmsac.vx v16, a6, v8
+    vmsge.vx v0, v16, a6
+    vsub.vx v16, v16, a6, v0.t
+#endif
+    //             FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
+    vse32.v    v16, (odd_coeffs_addr)
+
+    addi    a3, a3, -32
+    add     even_coeffs_addr, even_coeffs_addr, t0
+    add     odd_coeffs_addr, odd_coeffs_addr, t0
+    add     t4, t4, t0 // twiddle_factors += vl
+    bnez    a3, .ntt_level_0_avl_loop
+    //         }
+    addi a5, a5, 1 // j++
+    //     const int m = 1 << local_level;
+    li t2, 1
+    sll t2, t2, t5 // t2 <= m = (1 << local_level)
+    sub t2, a5, t2 // j - m
+    bnez t2, .ntt_level_0_j_loop
+    //     } 
+    // }
 
     ret
 .Lfunc_end3:
