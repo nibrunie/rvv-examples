@@ -135,7 +135,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vadd.vv v14, v14, v23
 
 
-    vsetvli    a6, x0, e32, m8, ta, mu
+    vsetvli    a6, x0, e32, m8, ta, ma
     // assume t1 == 3329 and t4 == 1290167
 #ifdef USE_VREM_MODULO
     vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
@@ -160,7 +160,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vsub.vv v14, v12, v22
     vadd.vv v12, v12, v22
 
-    vsetvli    a6, x0, e32, m8, ta, mu
+    vsetvli    a6, x0, e32, m8, ta, ma
     // assume t1 == 3329 (q) and t4 == 1290167 (2^32 // q)
 #ifdef USE_VREM_MODULO
     vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
@@ -231,7 +231,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     li a5, 0
 
     li a3, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
-    vsetvli    x0, a3, e32, m8, ta, mu // setting outside the loop since vl should be uniform for all iterations
+    // setting outside the loop since vl should be uniform for all iterations
+    // mask policy for level 0 must be mu (mask-undisturbed) so we need to set mu here
+    vsetvli    x0, a3, e32, m8, ta, mu
 // level 1
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
@@ -395,6 +397,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 // a0: destination buffer
 // a1: lhs input buffer
 // a2: rhs input buffer
+// Note: This function does not perform correction at the end of the Barrett's modulo reduction
+//       which means that result output are in [0; 2*q[ instead of [0; q[ (which would have required
+//       extra instuctions and will be carried out by the final inverse NTT anyway)
 .globl    rvv_ntt_mult_scale_asm # -- Begin function rvv_ntt_transform_asm_internal
     .p2align    1
     .type    rvv_ntt_mult_scale_asm,@function
@@ -409,7 +414,7 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // (1 / n % q) * 2^32 / q
     li t4, 4261422943
 
-    vsetvli    a7, a3, e32, m8, ta, mu // setting outside the loop since vl should be uniform for all iterations
+    vsetvli    a7, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
     li t0, 128 // sizeof(int) * vl => byte address increment update
 .rvv_ntt_mult_scale_avl_loop:
     // loading lhs coefficients
