@@ -230,11 +230,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // int j = 0
     li a5, 0
 
+    li a3, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
+    vsetvli    x0, a3, e32, m8, ta, mu // setting outside the loop since vl should be uniform for all iterations
 // level 1
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-	srli a3, t6, 1 // a3 <= avl = half_n
+	li a3, 32 // a3 <= avl = half_n = t6 / 2 = 32
 	// 
 	// t3 <- coeffs_a
 	mv	even_coeffs_addr, a0
@@ -247,14 +249,12 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         int* odd_coeffs = even_coeffs + half_n;
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     //         int* twiddleFactor = rootPowers[local_level];
-    li twiddle_factors_addr, (64 * 4)
-    mul twiddle_factors_addr, twiddle_factors_addr, t5 
-    add twiddle_factors_addr, a2, twiddle_factors_addr // t4 <- rootPowers[local_level]
+    // rootPowers offset for local_level=1 is 256
+    addi twiddle_factors_addr, a2, 256 // t4 <- rootPowers[local_level=1]
     //
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-    vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
 .ntt_level_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
     vle32.v    v16, (odd_coeffs_addr)
@@ -331,7 +331,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-    vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
+    // vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
 .ntt_level_0_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
     vle32.v    v16, (odd_coeffs_addr)
