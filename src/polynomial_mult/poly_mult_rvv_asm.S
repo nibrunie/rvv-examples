@@ -7,9 +7,9 @@
 	.type	rvv_ntt_transform_asm_internal,@function
 rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .Lpcrel_hi3:
-	auipc	a3, %got_pcrel_hi(ntt_coeff_indices_128)
-	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a3)
-	li	a3, 128	// a3 = avl = 128
+	auipc	a4, %got_pcrel_hi(ntt_coeff_indices_128)
+	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a4)
+	li	a4, 128	// a4 = avl = 128
 
 // building mask and twiddle factors
     // static allocation of vector registers (invariant in loop)
@@ -25,10 +25,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     li t0, 0xcc
     vmv.v.x v2, t0
 
-	li	a3, 128 // a3 <- avl
+	li	a4, 128 // a4 <- avl
 	mv	t0, a0 // t0 <- destination buffer
 
-    vsetvli    a7, a3, e32, m8, ta, mu
+    vsetvli    a7, a4, e32, m8, ta, mu
     slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
 
     // computing addresses for rootPowers (load from int rootPowers[8][64])
@@ -66,7 +66,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 // reconstruction level 6, 5, 4, 3 and 2
 // register mapping in this loop
 //   a1: start index of input coefficient buffer
-//   a3: avl
+//   a4: avl
 //   a5: current address of index buffer
 //   a7: vl
 //
@@ -180,7 +180,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vadd.vv v8, v8, v20
 
     // assume t1 == 3329 (q) and t4 == 1290167 (2^32 // q)
-    vsetvli    a7, a3, e32, m8, ta, ma
+    vsetvli    a7, a4, e32, m8, ta, ma
 #ifdef USE_VREM_MODULO
     vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
 #else
@@ -192,10 +192,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vse32.v    v8, (t0)
 
     // updating addresses and loop counter
-    addi    a3, a3, -32
+    addi    a4, a4, -32
     add     a5, a5, t6
     add     t0, t0, t6
-    bnez    a3, .loop_reconstruct_level_6_5_4_3_2
+    bnez    a4, .loop_reconstruct_level_6_5_4_3_2
 
 // 
 // last generic levels
@@ -208,7 +208,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t4: twiddleFactor current address
 //   t5: local_level
 //   t6: n
-//   a3: avl
+//   a4: avl
 //   a5: j
 //   a6: 2^32 // Q
 //
@@ -231,15 +231,15 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // int j = 0
     li a5, 0
 
-    li a3, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
+    li a4, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
     // setting outside the loop since vl should be uniform for all iterations
     // mask policy for level 0 must be mu (mask-undisturbed) so we need to set mu here
-    vsetvli    x0, a3, e32, m8, ta, mu
+    vsetvli    x0, a4, e32, m8, ta, mu
 // level 1
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-	li a3, 32 // a3 <= avl = half_n = t6 / 2 = 32
+	li a4, 32 // a4 <= avl = half_n = t6 / 2 = 32
 	// 
 	// t3 <- coeffs_a
 	mv	even_coeffs_addr, a0
@@ -299,11 +299,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //             FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
     vse32.v    v16, (odd_coeffs_addr)
 
-    addi    a3, a3, -32
+    addi    a4, a4, -32
     add     even_coeffs_addr, even_coeffs_addr, t0
     add     odd_coeffs_addr, odd_coeffs_addr, t0
     add     t4, t4, t0 // twiddle_factors += vl
-    bnez    a3, .ntt_level_avl_loop
+    bnez    a4, .ntt_level_avl_loop
     //         }
     addi a5, a5, 1 // j++
     //     const int m = 1 << local_level;
@@ -320,7 +320,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .ntt_level_0_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-    li a3, 64 // a3 <= avl = half_n = 64
+    li a4, 64 // a4 <= avl = half_n = 64
 	// 
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
 	// t3 <- coeffs_a = even_coeffs_addr
@@ -334,7 +334,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
-    // vsetvli    x0, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
+    // vsetvli    x0, a4, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
 .ntt_level_0_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
     vle32.v    v16, (odd_coeffs_addr)
@@ -380,11 +380,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //             FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
     vse32.v    v16, (odd_coeffs_addr)
 
-    addi    a3, a3, -32
+    addi    a4, a4, -32
     add     even_coeffs_addr, even_coeffs_addr, t0
     add     odd_coeffs_addr, odd_coeffs_addr, t0
     add     t4, t4, t0 // twiddle_factors += vl
-    bnez    a3, .ntt_level_0_avl_loop
+    bnez    a4, .ntt_level_0_avl_loop
     //         }
     //     } 
     // }
@@ -405,7 +405,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     .p2align    1
     .type    rvv_ntt_mult_scale_asm,@function
 rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
-    li a3, 128 // a3 = avl = 128
+    li a4, 128 // a4 = avl = 128
     // q (used for modulo reduction)
     li a6, 3329
     // t2 <- 1290167 = 2^32 / q (was 5039 = 2^24 / q)
@@ -415,7 +415,7 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // (1 / n % q) * 2^32 / q
     li t4, 4261422943
 
-    vsetvli    a7, a3, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
+    vsetvli    a7, a4, e32, m8, ta, ma // setting outside the loop since vl should be uniform for all iterations
     li t0, 128 // sizeof(int) * vl => byte address increment update
 .rvv_ntt_mult_scale_avl_loop:
     // loading lhs coefficients
@@ -453,11 +453,11 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
 
     vse32.v    v24, (a0)
 
-    addi    a3, a3, -32
+    addi    a4, a4, -32
     add     a0, a0, t0 // updating destination address
     add     a1, a1, t0 // updating lhs address
     add     a2, a2, t0 // updating rhs address
-    bnez    a3, .rvv_ntt_mult_scale_avl_loop
+    bnez    a4, .rvv_ntt_mult_scale_avl_loop
 .rvv_ntt_mult_scale_asm_end:
     ret
     .size    rvv_ntt_mult_scale_asm, .rvv_ntt_mult_scale_asm_end-rvv_ntt_transform_asm_internal
