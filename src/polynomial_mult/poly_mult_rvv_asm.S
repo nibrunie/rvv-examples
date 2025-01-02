@@ -81,10 +81,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // performing permutation
     vluxei32.v    v8, (a1), v8
 
+    vmv1r.v v0, v1 // v0 <- v1 (0xaa mask)
+
     // level 6
     // computing swapped elements
     vslidedown.vi v16, v8, 1
-    vmv1r.v v0, v1 // v0 <- v1 (0xaa mask)
     vslideup.vi v16, v8, 1, v0.t
     vrsub.vi v8, v8, 0, v0.t // negate
     vadd.vv v8, v16, v8
@@ -93,9 +94,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // swapping odd/even pairs of coefficients
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
     vmul.vv v8, v8, v24
+    vmv1r.v v0, v2
     // TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, n / 2, vl);
     vslidedown.vi v16, v8, 2
-    vmv1r.v v0, v2
     // vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_b4, vec_swapped_coeffs, vec_coeffs, n / 2, vl);
     vslideup.vi v16, v8, 2, v0.t
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vl);
