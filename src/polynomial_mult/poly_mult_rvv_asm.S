@@ -13,7 +13,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	li	a4, 128	// a4 = avl = 128
 
 #ifndef DISABLE_NTT_FIRST_FUSED_LEVELS
-
+#ifndef DISABLE_NTT_FUSED_LEVELS_INIT
 // building mask and twiddle factors
     // static allocation of vector registers (invariant in loop)
     //   v1: mask for level 6
@@ -64,7 +64,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 #ifndef USE_VREM_MODULO
     // t4 <- 1290167 = 2^32 / q (was 5039 = 2^24 / q)
     li t4, 1290167
-#endif
+#endif // USE_VREM_MODULO
+
+#endif // DISABLE_NTT_FUSED_LEVELS_INIT
 
 // reconstruction level 6, 5, 4, 3 and 2
 // register mapping in this loop
@@ -79,6 +81,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t4: 2^32 // q
 //   t6: sizeof(int) * vl => byte address increment update
 .loop_reconstruct_level_6_5_4_3_2:
+#ifndef DISABLE_NTT_FUSED_LEVELS_PERMUTE
     // loading indices
     vle32.v    v8, (a5)
     // performing permutation
@@ -86,13 +89,17 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     vmv1r.v v0, v1 // v0 <- v1 (0xaa mask)
 
+#endif // DISABLE_NTT_FUSED_LEVELS_PERMUTE
+#ifndef DISABLE_NTT_FUSED_LEVELS_LVL6
     // level 6
     // computing swapped elements
     vslidedown.vi v16, v8, 1
     vslideup.vi v16, v8, 1, v0.t
     vrsub.vi v8, v8, 0, v0.t // negate
     vadd.vv v8, v16, v8
+#endif // DISABLE_NTT_FUSED_LEVELS_LVL6
 
+#ifndef DISABLE_NTT_FUSED_LEVELS_LVL5
     // level 5 butterfly
     // swapping odd/even pairs of coefficients
     // vec_coeffs = FUNC_LMUL_MASKED(__riscv_vmul_vv_i32)(mask_up_b4, vec_coeffs, vec_coeffs, vec_twiddleFactor, vl);
@@ -114,6 +121,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vnmsac.vx v8, t1, v16
 #endif
 
+#endif // DISABLE_NTT_FUSED_LEVELS_LVL5
+
+#ifndef DISABLE_NTT_FUSED_LEVELS_LVL4
     // level 4
     // butterfly
     // a single 4-element group of twiddle factor is required
@@ -150,7 +160,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	vl2re32.v v16, (t5) // twiddle factors for level 3
 #endif
 
+#endif // DISABLE_NTT_FUSED_LEVELS_LVL4
 
+#ifndef DISABLE_NTT_FUSED_LEVELS_LVL3
     // level 3 butterfly
     // a single 8-element group of twiddle factor is required (assumed to be present in v4)
     vsetvli    a6, x0, e32, m2, ta, ma
@@ -173,6 +185,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vnmsac.vx v8, t1, v16
 #endif
 
+#endif // DISABLE_NTT_FUSED_LEVELS_LVL3
+
+#ifndef DISABLE_NTT_FUSED_LEVELS_LVL2
     // level 2 // butterfly
     // a single 16-element group of twiddle factor is required (assumed to be present in v24)
     vsetvli    a6, x0, e32, m4, ta, ma
@@ -191,8 +206,13 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     vnmsac.vx v8, t1, v16
 #endif
 
+#endif // DISABLE_NTT_FUSED_LEVELS_LVL2
+
+#ifndef DISABLE_NTT_FUSED_LEVELS_STORING
     // storing results
     vse32.v    v8, (t0)
+
+#endif // DISABLE_NTT_FUSED_LEVELS_STORING
 
     // updating addresses and loop counter
     addi    a4, a4, -32
