@@ -1,7 +1,8 @@
-// void rvv_ntt_transform_asm_internal(int* dst, int* coeffs, int rootPowers[8][64]); 
+// void rvv_ntt_transform_asm_internal(int* dst, int* coeffs, int rootPowers[8][64], int finalCorrection); 
 // a0: destination buffer
 // a1: input buffer
 // a2: address for root powers 2D array
+// a3: perform barrett's modulo reduction final correction
 .globl	rvv_ntt_transform_asm_internal # -- Begin function rvv_ntt_transform_asm_internal
 	.p2align	1
 	.type	rvv_ntt_transform_asm_internal,@function
@@ -317,6 +318,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     // level 0
     li a5, 0 // j <- 0
+    bnez a3, .ntt_correction_level_0_j_loop
 .ntt_level_0_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
@@ -365,8 +367,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // Barrett's reduction of v24 / vec_even_results
     vmulh.vx v8, v24, a7
     vnmsac.vx v24, a6, v8
-    vmsge.vx v0, v24, a6
-    vsub.vx v24, v24, a6, v0.t
     //             }
     //             FUNC_LMUL(__riscv_vse32_v_i32)(even_coeffs, vec_even_results, vl);
     vse32.v    v24, (even_coeffs_addr)
@@ -374,8 +374,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // Barrett's reduction of v16 / vec_odd_results
     vmulh.vx v8, v16, a7
     vnmsac.vx v16, a6, v8
-    vmsge.vx v0, v16, a6
-    vsub.vx v16, v16, a6, v0.t
 #endif
     //             FUNC_LMUL(__riscv_vse32_v_i32)(odd_coeffs, vec_odd_results, vl);
     vse32.v    v16, (odd_coeffs_addr)
@@ -388,6 +386,48 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //         }
     //     } 
     // }
+
+    ret
+.ntt_correction_level_0_j_loop:
+    li a4, 64 // a4 <= avl = half_n = 64
+	mv	even_coeffs_addr, a0
+    sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
+    mv twiddle_factors_addr, a2 // t4 <- rootPowers[local_level=0]
+
+.ntt_correction_level_0_avl_loop:
+    vle32.v    v16, (odd_coeffs_addr)
+    vle32.v    v24, (t4)
+    vle32.v    v8, (even_coeffs_addr)
+
+    vmul.vv v16, v16, v24
+    vadd.vv v24, v8, v16
+    vsub.vv v16, v8, v16
+
+#ifdef USE_VREM_MODULO
+    vrem.vx v24, v24, a6 // to be replaced by Barrett's reduction
+    vse32.v    v24, (even_coeffs_addr)
+    vrem.vx v16, v16, a6 // to be replaced by Barrett's reduction
+#else
+    vmulh.vx v8, v24, a7
+    vnmsac.vx v24, a6, v8
+    vmsge.vx v0, v24, a6
+    vsub.vx v24, v24, a6, v0.t
+
+    vse32.v    v24, (even_coeffs_addr)
+
+    // Barrett's reduction of v16 / vec_odd_results
+    vmulh.vx v8, v16, a7
+    vnmsac.vx v16, a6, v8
+    vmsge.vx v0, v16, a6
+    vsub.vx v16, v16, a6, v0.t
+#endif
+    vse32.v    v16, (odd_coeffs_addr)
+
+    addi    a4, a4, -32
+    add     even_coeffs_addr, even_coeffs_addr, t0
+    add     odd_coeffs_addr, odd_coeffs_addr, t0
+    add     t4, t4, t0 // twiddle_factors += vl
+    bnez    a4, .ntt_correction_level_0_avl_loop
 
     ret
 .Lfunc_end3:
