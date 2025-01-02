@@ -967,14 +967,16 @@ extern void rvv_ntt_transform_asm_internal(int* dst, int* coeffs, int rootPowers
 extern void rvv_ntt_mult_scale_asm(int* dst, int* lhs, int* rhs); 
 
 void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
-    // FIXME: ring structure should be a function argument
-    // X^4 - 1 Ring: ring_t ring = {.modulo =3329, .invDegree = 2497, .invRootOfUnity = 1729, .rootOfUnity = 1600};
     // X^128 - 1 Ring:
     ring_t ring = getRing(lhs.degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
 
-    ntt_t ntt_lhs = allocate_poly(lhs.degree, 3329);
+    // "stack" allocation of temporary NTT structures
+    int ntt_lhs_coeffs[128];
+    int ntt_lhs_times_rhs_coeffs[128];
+
+    ntt_t ntt_lhs = {.degree = 128, .modulo = 3329, .coeffs = ntt_lhs_coeffs, .coeffSize = sizeof(int) * 128};
     // used for both right-hand-side and destination NTT
-    ntt_t ntt_lhs_times_rhs = allocate_poly(lhs.degree, 3329); 
+    ntt_t ntt_lhs_times_rhs = {.degree = 128, .modulo = 3329, .coeffs = ntt_lhs_times_rhs_coeffs, .coeffSize = sizeof(int) * 128};
 
     rvv_ntt_transform_asm_internal(ntt_lhs.coeffs, lhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
     rvv_ntt_transform_asm_internal(ntt_lhs_times_rhs.coeffs, rhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
@@ -983,9 +985,6 @@ void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs
     rvv_ntt_mult_scale_asm(ntt_lhs_times_rhs.coeffs, ntt_lhs.coeffs, ntt_lhs_times_rhs.coeffs);
 
     rvv_ntt_transform_asm_internal(dst->coeffs, ntt_lhs_times_rhs.coeffs, ringInvPowers[0], 1 /* modulo correction */);
-
-    free(ntt_lhs.coeffs);
-    free(ntt_lhs_times_rhs.coeffs);
 }
 
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
