@@ -978,13 +978,17 @@ void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs
     // used for both right-hand-side and destination NTT
     ntt_t ntt_lhs_times_rhs = {.degree = 128, .modulo = 3329, .coeffs = ntt_lhs_times_rhs_coeffs, .coeffSize = sizeof(int) * 128};
 
+#ifndef DISABLE_ASM_TRANSFORM
     rvv_ntt_transform_asm_internal(ntt_lhs.coeffs, lhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
     rvv_ntt_transform_asm_internal(ntt_lhs_times_rhs.coeffs, rhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
+#endif
 
-    // element-size multiplication anddivision by the degree
+    // element-size multiplication and division by the degree
     rvv_ntt_mult_scale_asm(ntt_lhs_times_rhs.coeffs, ntt_lhs.coeffs, ntt_lhs_times_rhs.coeffs);
 
+#ifndef DISABLE_ASM_INV_TRANSFORM
     rvv_ntt_transform_asm_internal(dst->coeffs, ntt_lhs_times_rhs.coeffs, ringInvPowers[0], 1 /* modulo correction */);
+#endif
 }
 
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {

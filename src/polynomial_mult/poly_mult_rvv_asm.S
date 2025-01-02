@@ -12,6 +12,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a4)
 	li	a4, 128	// a4 = avl = 128
 
+#ifndef DISABLE_NTT_FIRST_FUSED_LEVELS
+
 // building mask and twiddle factors
     // static allocation of vector registers (invariant in loop)
     //   v1: mask for level 6
@@ -198,6 +200,8 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     add     t0, t0, t6
     bnez    a4, .loop_reconstruct_level_6_5_4_3_2
 
+#endif // DISABLE_NTT_FIRST_FUSED_LEVELS
+
 // 
 // last generic levels
 #define even_coeffs_addr t3
@@ -228,6 +232,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // constant for address update
     li t0, 128 // sizeof(int) * vl => byte address increment update
     // for (; local_level >= 0; n = 2 * n, local_level--) {
+#ifndef DISABLE_NTT_LEVEL_1
 .ntt_level:
     // int j = 0
     li a5, 0
@@ -312,6 +317,10 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     sll t2, t2, t5 // t2 <= m = (1 << local_level)
     sub t2, a5, t2 // j - m
     bnez t2, .ntt_j_loop
+
+#endif // DISABLE_NTT_LEVEL_1
+
+#ifndef DISABLE_NTT_LEVEL_0
     //     } 
     // }
     sll t6, t6, 1 // n = 2 * n
@@ -428,6 +437,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     add     odd_coeffs_addr, odd_coeffs_addr, t0
     add     t4, t4, t0 // twiddle_factors += vl
     bnez    a4, .ntt_correction_level_0_avl_loop
+#endif // DISABLE_NTT_LEVEL_0
 
     ret
 .Lfunc_end3:
@@ -445,6 +455,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     .p2align    1
     .type    rvv_ntt_mult_scale_asm,@function
 rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
+#ifndef DISABLE_NTT_MULT_SCALE
     li a4, 128 // a4 = avl = 128
     // q (used for modulo reduction)
     li a6, 3329
@@ -498,6 +509,7 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     add     a1, a1, t0 // updating lhs address
     add     a2, a2, t0 // updating rhs address
     bnez    a4, .rvv_ntt_mult_scale_avl_loop
+#endif // DISABLE_NTT_MULT_SCALE
 .rvv_ntt_mult_scale_asm_end:
     ret
     .size    rvv_ntt_mult_scale_asm, .rvv_ntt_mult_scale_asm_end-rvv_ntt_transform_asm_internal
