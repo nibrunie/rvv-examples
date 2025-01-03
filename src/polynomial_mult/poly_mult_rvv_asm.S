@@ -66,6 +66,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     li t4, 1290167
 #endif // USE_VREM_MODULO
 
+#else // DISABLE_NTT_FUSED_LEVELS_INIT
+    li	t6, 128 // a4 <- avl
+	mv	t0, a0 // t0 <- destination buffer
 #endif // DISABLE_NTT_FUSED_LEVELS_INIT
 
 // reconstruction level 6, 5, 4, 3 and 2
