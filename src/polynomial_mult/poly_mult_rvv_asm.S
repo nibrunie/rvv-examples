@@ -286,16 +286,18 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
+    // There are only 32 twiddle factors for level 1 so a single LMUL=8 vle32 is enough
+    // and can be factorized across the two AVL loop
+    //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
+    vle32.v    v0, (t4)
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
 .ntt_level_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);
     vle32.v    v16, (odd_coeffs_addr)
-    //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
-    vle32.v    v24, (t4)
     //             TYPE_LMUL(vint32) vec_even_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) even_coeffs, vl);
     vle32.v    v8, (even_coeffs_addr)
     //             TYPE_LMUL(vint32) vec_odd_results = FUNC_LMUL(__riscv_vmul_vv_i32)(vec_odd_coeffs, vec_twiddleFactor, vl);
-    vmul.vv v16, v16, v24
+    vmul.vv v16, v16, v0
     //             TYPE_LMUL(vint32) vec_even_results = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
     vadd.vv v24, v8, v16
     //             vec_odd_results = FUNC_LMUL(__riscv_vsub_vv_i32)(vec_even_coeffs, vec_odd_results, vl);
@@ -331,7 +333,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     addi    a4, a4, -32
     add     even_coeffs_addr, even_coeffs_addr, t0
     add     odd_coeffs_addr, odd_coeffs_addr, t0
-    add     t4, t4, t0 // twiddle_factors += vl
     bnez    a4, .ntt_level_avl_loop
     //         }
     addi a5, a5, 1 // j++
