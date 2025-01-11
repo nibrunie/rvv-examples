@@ -1,4 +1,4 @@
-# Softmax
+# Polynomial Multiplication
 
 The examples in this directory implement multiple versions of polynomial multiplication.
 Those examples are designed to illustrate multiple ways RISC-V Vector Extension (RVV) can
@@ -28,7 +28,8 @@ make clean
 make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -O3 -DNDEBUG -DCOUNT_CYCLE"
 ```
 
-You can also reduce the verbosity level by removing `-DVERBOSE` and you can change the number of tests executed for each benchmark wit `-DNUM_TESTS=<num-of-tests>`.
+You can also reduce the verbosity level by removing `-DVERBOSE` and
+you can change the number of tests executed for each benchmark wit `-DNUM_TESTS=<num-of-tests>`.
 
 ## How to run polynomial multiplication benchmark in the conditions of the optimization experiments
 
@@ -51,6 +52,3 @@ be `src/polynomial_mult` and execute a simple `make` command to build and run th
 make clean
 make sim_basic_poly_test 
 ```
-
-
-
