@@ -30,6 +30,16 @@ make sim_bench_poly_mult EXTRA_CFLAGS="-DVERBOSE -O3 -DNDEBUG -DCOUNT_CYCLE"
 
 You can also reduce the verbosity level by removing `-DVERBOSE` and you can change the number of tests executed for each benchmark wit `-DNUM_TESTS=<num-of-tests>`.
 
+## How to run polynomial multiplication benchmark in the conditions of the optimization experiments
+
+To reproduce the test condition (runner is spike, not used for actual latency evaluation) of the experiments
+done to optimize the polynomial multiplication in assembly you can run the following commands:
+
+```
+make clean
+make sim_bench_poly_mult EXTRA_CFLAGS="-O3 -DLMUL=4 -DNLMUL=2 -DWLMUL=8 -DE32_MASK=8 -DCOUNT_CYCLE -DUSE_SLIDE_PAIR_SWAP_NO -DNUM_TESTS=500  -DNDEBUG -DUSE_VREM_MODULO_NO"
+```
+
 # How to build and execute basic polynomial test
 
 This directory contains a basic test evaluating a few functions performing polynomial arithmetic.
@@ -41,3 +51,6 @@ be `src/polynomial_mult` and execute a simple `make` command to build and run th
 make clean
 make sim_basic_poly_test 
 ```
+
+
+
