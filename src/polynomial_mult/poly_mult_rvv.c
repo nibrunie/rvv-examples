@@ -90,6 +90,7 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 #ifndef LMUL
 #define LMUL 2
 #define WLMUL 4 // 2 * LMUL (for widening)
+#define NLMUL 1 // LMUL/2 (for narrowing)
 #define E32_MASK 16 // 32 / LMUL
 #endif
 
@@ -103,12 +104,14 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 
 #define BUILD_LMUL_ARGS(x) x, LMUL
 #define BUILD_WLMUL_ARGS(x) x, WLMUL
+#define BUILD_NLMUL_ARGS(x) x, NLMUL
 #define CONCAT(x, y) x ## y
 #define CONCAT3(x, y, z) x ## y ## z
 #define CONCAT_FWD(ARGS) CONCAT(ARGS)
 #define CONCAT3_FWD(ARGS) CONCAT3(ARGS)
 #define PREPEND_LMUL(x) CONCAT_FWD(BUILD_LMUL_ARGS(x))
 #define PREPEND_WLMUL(x) CONCAT_FWD(BUILD_WLMUL_ARGS(x))
+#define PREPEND_NLMUL(x) CONCAT_FWD(BUILD_NLMUL_ARGS(x))
 #define APPEND_LMUL(x) CONCAT(BUILD_LMUL_REV_ARGS(x))
 
 
@@ -122,17 +125,22 @@ void rvv_ntt_transform_helper(ntt_t* dst, int* coeffs, int n, int level, int roo
 
 #define FUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS(CMD))
 #define WFUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_WPARAMS(CMD))
+#define NFUNC_LMUL(CMD) _FUNC_LMUL_ARG1(BUILD_NPARAMS(CMD))
 #define FUNC_LMUL_2PART(CMD0,CMD1) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_2PART(CMD0,CMD1))
+#define NFUNC_LMUL_2PART(CMD0,CMD1) _FUNC_LMUL_2PART_ARG1(BUILD_NPARAMS_2PART(CMD0,CMD1))
 #define FUNC_LMUL_MASKED(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_LMUL_MASKED(CMD))
 #define TYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS(FMT))
 #define WTYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_WPARAMS(FMT))
+#define NTYPE_LMUL(FMT) _TYPE_LMUL_ARG1(BUILD_NPARAMS(FMT))
 #define MASK_TYPE_E32(FMT) _TYPE_LMUL_ARG1(BUILD_PARAMS_MASK_E32(FMT))
 #define MASK_FUNC_E32(CMD) _FUNC_LMUL_ARG1(BUILD_PARAMS_MASK_E32(CMD))
 #define MASK_LMUL_FUNC_E32(CMD) _FUNC_LMUL_2PART_ARG1(BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD))
 
 #define BUILD_PARAMS(FMT) FMT, PREPEND_LMUL(m)
 #define BUILD_WPARAMS(FMT) FMT, PREPEND_WLMUL(m)
+#define BUILD_NPARAMS(FMT) FMT, PREPEND_NLMUL(m)
 #define BUILD_PARAMS_2PART(CMD0,CMD1) CMD0, PREPEND_LMUL(m), CMD1, PREPEND_LMUL(m)
+#define BUILD_NPARAMS_2PART(CMD0,CMD1) CMD0, PREPEND_NLMUL(m), CMD1, PREPEND_NLMUL(m)
 #define BUILD_PARAMS_MASK_E32(FMT) FMT, E32_MASK
 #define BUILD_PARAMS_MASK_E32_LMUL_FUNC(CMD) CMD, PREPEND_LMUL(m), _b, E32_MASK
 #define BUILD_PARAMS_LMUL_MASKED(FMT) FMT, LMUL_MASKED_SUFFIX
@@ -217,8 +225,12 @@ static inline TYPE_LMUL(vint32) rvv_barrett_reduction(TYPE_LMUL(vint32) v, size_
     // dst->coeffs[d] = tmp >= 3329 ? tmp - 3329 : tmp; 
     // v is the result of a multiplication between two coefficients (each up to 13-bit wide)
     // so 64-bit dynamic is required when multiplying it with 5039 (13-bit unsigned)
+#   if 1
     WTYPE_LMUL(vint64) vec_wide_results = WFUNC_LMUL(__riscv_vwmul_vx_i64)(v, 5039, vl);
     TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vnsra_wx_i32)(vec_wide_results, 24, vl);
+#   else
+    TYPE_LMUL(vint32) vec_tmp_results = FUNC_LMUL(__riscv_vmulh_vx_i32)(v, 1290167, vl);
+#   endif
     v = FUNC_LMUL(__riscv_vnmsac_vx_i32)(v, 3329, vec_tmp_results, vl);
     MASK_TYPE_E32(vbool) cmp_mask = MASK_LMUL_FUNC_E32(__riscv_vmsge_vx_i32)(v, 3329, vl);
     v = FUNC_LMUL_MASKED(__riscv_vadd_vx_i32)(cmp_mask, v, v, -3329, vl);
@@ -607,6 +619,8 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         local_level = 6;
         n = 2;
     }
+    void poly_dump(polynomial_t poly);
+    static int counter = 0;
 
     // reconstruction stage input should be equal to the destination buffer
     // (a copy was inserted to ensure this is true)
@@ -645,9 +659,32 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
 
             TYPE_LMUL(vint32) vec_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) coeffs_addr, vl);
             
+
+#ifdef USE_SLIDE_PAIR_SWAP
             // swapping odd/even pairs of coefficients
             TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL(__riscv_vslidedown_vx_i32)(vec_coeffs, 1, vl);
             vec_swapped_coeffs = FUNC_LMUL_MASKED(__riscv_vslideup_vx_i32)(mask_up_lvl6_b4, vec_swapped_coeffs, vec_coeffs, 1, vl);
+
+#else
+#ifdef USE_IDENTITY_SWAP
+            // identity to serve as benchmark baseline 
+            // NOTE: this path is not expected to be functional
+            TYPE_LMUL(vint32) vec_swapped_coeffs = vec_coeffs;
+#else
+            // using a mix of narrowing shifts and widening arithmetic operations
+            // to peform pairwise element swap
+            // 1. vnsrl e64 -> e32
+            TYPE_LMUL(vuint64) vec_coeffs_u64 = FUNC_LMUL_2PART(__riscv_vreinterpret_v_u32, _u64)( FUNC_LMUL_2PART(__riscv_vreinterpret_v_i32, _u32)(vec_coeffs));
+            NTYPE_LMUL(vuint32) vec_odd_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 32, vl / 2);
+            NTYPE_LMUL(vuint32) vec_even_coeffs = NFUNC_LMUL(__riscv_vnsrl_wx_u32)(vec_coeffs_u64, 0, vl / 2);
+            // 2. vwmacc ()
+            TYPE_LMUL(vuint64) vec_coeffs_i64 = FUNC_LMUL(__riscv_vwaddu_vv_u64)(vec_odd_coeffs, vec_even_coeffs, vl / 2);
+            vec_coeffs_i64 = FUNC_LMUL(__riscv_vwmaccu_vx_u64)(vec_coeffs_i64, -1 /* 2^32 - 1 */, vec_even_coeffs, vl / 2);
+            TYPE_LMUL(vint32) vec_swapped_coeffs = FUNC_LMUL_2PART(__riscv_vreinterpret_v_i64, _i32)(FUNC_LMUL_2PART(__riscv_vreinterpret_v_u64, _i64)(vec_coeffs_i64));
+
+#endif
+#endif
+
 
             vec_coeffs = FUNC_LMUL_MASKED(__riscv_vneg_v_i32)(mask_up_lvl6_b4, vec_coeffs, vec_coeffs, vl);
             vec_coeffs = FUNC_LMUL(__riscv_vadd_vv_i32)(vec_coeffs, vec_swapped_coeffs, vl);
@@ -656,8 +693,10 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
             // fusing optimization for the next level (4-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 4, dst->modulo, vec_twiddleFactor_lvl5, mask_up_lvl5_b4, vl);
 
+#if 1
             // fusing optimization for the next level (8-elt group case)
             vec_coeffs = rvv_ntt_butterfly(vec_coeffs, 8, dst->modulo, vec_twiddleFactor_lvl4, mask_up_lvl4_b4, vl);
+#endif
 
             FUNC_LMUL(__riscv_vse32_v_i32)(coeffs_addr, vec_coeffs, vl);
         }
@@ -667,6 +706,14 @@ void rvv_ntt_transform_fastest_helper(ntt_t* dst, int* coeffs, int _n, int level
         assert(4 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=4 for level 5 must fit in vlmax for current LMUL
         assert(8 <= FUNC_LMUL(__riscv_vsetvlmax_e32)()); // the group number of elements n=8 for level 4 must fit in vlmax for current LMUL
     }
+
+#if 0
+    if (counter++ == 0) {
+        printf("fastest_helper:\n");
+        poly_dump(*dst);
+    }
+#endif
+
 
     // disabling assert to allow skipping some optimization levels due to LMUL too small to fit
     // a local element group to perform swapping 
@@ -904,6 +951,46 @@ void poly_mult_ntt_rvv_fastest(polynomial_t* dst, polynomial_t lhs, polynomial_t
     free(ntt_lhs_times_rhs.coeffs);
 }
 
+
+/** Compute n-element NTT, assuming level @p level
+ * defined in poly_mult_rvv_asm.S
+ *  WARNING: non-indexed variant is destructive as coeffs is used as a temporary buffer and overwritten
+ *
+ * @param[out] dst destination buffer for NTT transform result
+ * @param[in] inputs coefficients (must contain @p n elements)
+ * @param n number of coefficients
+ * @param level NTT level (start from 0)
+ * @param rootPowers 2D array of pre-computed root of unit powers rootPowers[level][i] = (rootOfUnit ^ level) ^ i
+*/
+extern void rvv_ntt_transform_asm_internal(int* dst, int* coeffs, int rootPowers[8][64], int finalCorrection); 
+
+extern void rvv_ntt_mult_scale_asm(int* dst, int* lhs, int* rhs); 
+
+void poly_mult_ntt_rvv_asm(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
+    // X^128 - 1 Ring:
+    ring_t ring = getRing(lhs.degree); // {.modulo =3329, .invDegree = 3303, .invRootOfUnity = 2522, .rootOfUnity = 33};
+
+    // "stack" allocation of temporary NTT structures
+    int ntt_lhs_coeffs[128];
+    int ntt_lhs_times_rhs_coeffs[128];
+
+    ntt_t ntt_lhs = {.degree = 128, .modulo = 3329, .coeffs = ntt_lhs_coeffs, .coeffSize = sizeof(int) * 128};
+    // used for both right-hand-side and destination NTT
+    ntt_t ntt_lhs_times_rhs = {.degree = 128, .modulo = 3329, .coeffs = ntt_lhs_times_rhs_coeffs, .coeffSize = sizeof(int) * 128};
+
+#ifndef DISABLE_ASM_TRANSFORM
+    rvv_ntt_transform_asm_internal(ntt_lhs.coeffs, lhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
+    rvv_ntt_transform_asm_internal(ntt_lhs_times_rhs.coeffs, rhs.coeffs, ringPowers[0], 0 /* no modulo correction */);
+#endif
+
+    // element-size multiplication and division by the degree
+    rvv_ntt_mult_scale_asm(ntt_lhs_times_rhs.coeffs, ntt_lhs.coeffs, ntt_lhs_times_rhs.coeffs);
+
+#ifndef DISABLE_ASM_INV_TRANSFORM
+    rvv_ntt_transform_asm_internal(dst->coeffs, ntt_lhs_times_rhs.coeffs, ringInvPowers[0], 1 /* modulo correction */);
+#endif
+}
+
 void poly_mult_ntt_rvv_strided(polynomial_t* dst, polynomial_t lhs, polynomial_t rhs, polynomial_t modulo) {
     ntt_params_t params_strided = {._USE_STRIDED_LOAD = 1, ._USE_INDEXED_LOAD = 0, ._FINAL_N = 4, ._BARRETT_RED = 0, ._UNROLL_STOP = 6, ._FUSED_BUTTERFLY = 0};
     poly_mult_ntt_rvv_v3(dst, lhs, rhs, modulo, params_strided);
@@ -969,4 +1056,8 @@ poly_mult_bench_result_t poly_mult_ntt_rvv_indexed_bench(polynomial_t* dst, poly
 
 poly_mult_bench_result_t poly_mult_ntt_rvv_fastest_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
     return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_fastest, golden);
+}
+
+poly_mult_bench_result_t poly_mult_ntt_rvv_asm_bench(polynomial_t* dst, polynomial_t* lhs, polynomial_t* rhs, polynomial_t* modulo, polynomial_t* golden) {
+    return poly_mult_bench(dst, lhs, rhs, modulo, poly_mult_ntt_rvv_asm, golden);
 }

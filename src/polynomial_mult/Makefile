@@ -18,8 +18,8 @@ VLEN?=128
 # path to proxy-kernel (pk)
 PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk64 
 
-BUILD_ARCH=rv64gcv_zvbb1p0 -menable-experimental-extensions
-SIM_ARCH=rv64gcv_zvbb
+BUILD_ARCH=rv64gcv_zba_zvbb1p0 -menable-experimental-extensions
+SIM_ARCH=rv64gcv_zba_zvbb
 
 # SIMULATOR
 # Available options in the Docker (uncomment one)
@@ -37,7 +37,11 @@ $(BUILD_DIR)/poly_mult_baseline.o: poly_mult_baseline.c
 
 $(BUILD_DIR)/poly_mult_rvv.o: poly_mult_rvv.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
+	$(RISCVCLANG) $(EXTRA_CFLAGS)  $(COMMON_INCLUDES) -I./ -I$(INCLUDE_DIR) -march=$(BUILD_ARCH) -c -o $@ $^
+
+$(BUILD_DIR)/poly_mult_rvv_asm.o: poly_mult_rvv_asm.S
+	mkdir -p $(BUILD_DIR)
+	$(RISCVCLANG) $(EXTRA_CFLAGS)  $(COMMON_INCLUDES)  -I./ -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
 $(BUILD_DIR)/ntt_scalar.o: ntt_scalar.c
 	mkdir -p $(BUILD_DIR)
@@ -47,9 +51,9 @@ $(BUILD_DIR)/poly_mult_ntt.o: poly_mult_ntt.c
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCLANG) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -I$(INCLUDE_DIR)  -O2 -march=$(BUILD_ARCH) -c -o $@ $^
 
-$(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
+$(BUILD_DIR)/bench_poly_mult: bench_poly_mult.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/poly_mult_rvv.o $(BUILD_DIR)/poly_mult_rvv_asm.o $(BUILD_DIR)/ntt_scalar.o $(BUILD_DIR)/poly_mult_ntt.o
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS)  $(COMMON_INCLUDES) -I./ -O2 -march=rv64gcv $^ -lm -o $@
 
 $(BUILD_DIR)/basic_poly_test: basic_poly_test.c $(BUILD_DIR)/poly_mult_baseline.o $(BUILD_DIR)/ntt_scalar.o
 	mkdir -p $(BUILD_DIR)

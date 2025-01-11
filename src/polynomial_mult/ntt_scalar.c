@@ -120,7 +120,7 @@ void initRootPowerTable(ring_t ring, int rootPowers[8][64], int rootOfUnity, int
         rootPowers[0][p] = ring_mul(ring, rootPowers[0][p-1], rootPowers[0][1]);
     }
     for (int d = 1; d < 7; d++) {
-        for (int offset = 0; offset < (replicate ? (64 / (64 >> d)) : 1); offset += 64 >> d) {
+        for (int offset = 0; offset < (replicate ? 64 : 1); offset += 64 >> d) {
             rootPowers[d][offset+0] = 1;
             rootPowers[d][offset+1] = ring_square(ring, rootPowers[d-1][1]);
             for (int p = 2; p < (64 >> d); ++p) {

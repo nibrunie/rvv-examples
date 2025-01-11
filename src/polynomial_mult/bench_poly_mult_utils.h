@@ -62,7 +62,6 @@ static int compare_poly(polynomial_t lhs, polynomial_t rhs) {
   int k;
   for (k = 0; k <= lhs.degree; ++k) {
     if (fix_modulo(lhs.coeffs[k], 3329) != fix_modulo(rhs.coeffs[k], 3329)) {
-      printf("lhs.coeffs[%d] = %d, rhs.coeffs[%d] = %d\n", k, lhs.coeffs[k], k, rhs.coeffs[k]);
       return -(k+1); // non-zero error code
     }
   };
