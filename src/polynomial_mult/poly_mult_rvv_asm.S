@@ -2,76 +2,97 @@
 // a0: destination buffer
 // a1: input buffer
 // a2: address for root powers 2D array
-// a3: perform barrett's modulo reduction final correction
-.globl	rvv_ntt_transform_asm_internal # -- Begin function rvv_ntt_transform_asm_internal
-	.p2align	1
-	.type	rvv_ntt_transform_asm_internal,@function
+// a3: perform barrett's modulo reduction final correction (in level 0)
+.globl    rvv_ntt_transform_asm_internal # -- Begin function rvv_ntt_transform_asm_internal
+    .p2align    1
+    .type    rvv_ntt_transform_asm_internal,@function
 rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
+// materializing the permutation coefficient indices array address (in register a5)
 .Lpcrel_hi3:
-	auipc	a4, %got_pcrel_hi(ntt_coeff_indices_128)
-	ld	a5, %pcrel_lo(.Lpcrel_hi3)(a4)
-	li	a4, 128	// a4 = avl = 128
+    auipc    a4, %got_pcrel_hi(ntt_coeff_indices_128)
+    ld    a5, %pcrel_lo(.Lpcrel_hi3)(a4)
 
+// materializing the consntant application vector length (in register a4)
+    li    a4, 128    // a4 = avl = 128
+
+// macros DISABLE_* are used to selectively disable some code sections.
+// This makes the code non functional but can be used to evaluate the
+// latency impacts of different selections of sections.
 #ifndef DISABLE_NTT_FIRST_FUSED_LEVELS
 #ifndef DISABLE_NTT_FUSED_LEVELS_INIT
-// building mask and twiddle factors
-    // static allocation of vector registers (invariant in loop)
-    //   v1: mask for level 6
-    //   v2: mask for level 5
-    //   v3: twiddle factors for level 4
-    //   v4v5v6v7: twiddle factors for level 2
-    //   v24v25v26v27v28v29v30v31: twiddle factors for level 5
+
+// building mask and twiddle factors for level 6 through 2
+// static allocation of vector registers (invariant in loop)
+//   v1: mask for level 6
+//   v2: mask for level 5
+//   v3: twiddle factors for level 4
+//   v4v5v6v7: twiddle factors for level 2
+//   v24v25v26v27v28v29v30v31: twiddle factors for level 5
+
+// mask for level 6 (v1)
     li t0, 0xaa
     vsetvli    a6, zero, e8, m1, ta, ma
     vmv.v.x v1, t0
 
+// mask for level 5 (v2)
     li t0, 0xcc
     vmv.v.x v2, t0
 
-	li	a4, 128 // a4 <- avl
-	mv	t0, a0 // t0 <- destination buffer
+    mv    t0, a0 // t0 <- destination buffer
 
+// increment update (in bytes) for array addresses (in t6)
     vsetvli    a7, a4, e32, m8, ta, mu
     slli t6, a7, 2 // sizeof(int) * vl => byte address increment update
 
-    // computing addresses for rootPowers (load from int rootPowers[8][64])
-    // + pre-loading some vector register groups
+// computing addresses for rootPowers (load from int rootPowers[8][64])
+// + pre-loading some vector register groups
 
-    // for level 2
-	li t5, (2 * 64 * 4)
-	add t5, a2, t5 // t6 <- rootPowers[2]
+// twiddle factors for level 2 (in v4v5v6v7)
+// The use of a whole vector register group vector load prevents us from
+// needing to insert a vsetvl* instruction here.
+    li t5, (2 * 64 * 4)
+    add t5, a2, t5 // t6 <- rootPowers[2]
     vl4re32.v v4, (t5) // twiddle factors for level 2
 
-    // for level 4
-	li t3, (4 * 64 * 4)
-	add t3, a2, t3 // t3 <- rootPowers[4]
-	vl1re32.v v3, (t3) // twiddle factors for level 4
+// twiddle factors for level 4 (in v3)
+    li t3, (4 * 64 * 4)
+    add t3, a2, t3 // t3 <- rootPowers[4]
+    vl1re32.v v3, (t3) // twiddle factors for level 4
 
-    // for level 5
-	li t2, (5 * 64 * 4)
-	add t2, a2, t2 // t2 <- rootPowers[5]
-	vmv.v.i v24, 1
-	vmv1r.v v0, v2
-	vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
+// twiddle factors for level 5 (in v24v25v26v27v28v29v30v31)
+// Since we used a masked load we cannot rely on a whole vector register group load
+// and have to make sure vtype is properly configured (LMUL=8, VLMAX)
+    li t2, (5 * 64 * 4)
+    add t2, a2, t2 // t2 <- rootPowers[5]
+    vmv.v.i v24, 1
+    vmv1r.v v0, v2
+    vle32.v v24, (t2), v0.t // loading twiddleFactor for level 5
 
-    // last address computation since we need t5 to keep the address of rootPowers[2]
-	li t5, (3 * 64 * 4)
-	add t5, a2, t5 // t5 <- rootPowers[3]
+// last address computation since we need t5 to keep the address of rootPowers[2]
+// t5 contains the address of the twiddle factors array for level 3
+    li t5, (3 * 64 * 4)
+    add t5, a2, t5 // t5 <- rootPowers[3]
 
-    // hoisting constants used for modulo reduction (the second
-    // one is only used when Barrett's method is used)
+// hoisting constants used for modulo reduction (the second
+// one is only used when Barrett's method is used)
     li t1, 3329 // should be hoisted outside the loop
+
+
+// The USE_VREM_MODULO macro is used to switch between the use of the
+// vrem instruction and the use of the Barrett's reduction method.
+// Barrett's reduction is always faster in our experiments but vrem
+// is useful to debug the implementation.
 #ifndef USE_VREM_MODULO
     // t4 <- 1290167 = 2^32 / q (was 5039 = 2^24 / q)
     li t4, 1290167
 #endif // USE_VREM_MODULO
 
 #else // DISABLE_NTT_FUSED_LEVELS_INIT
-    li	t6, 128 // a4 <- avl
-	mv	t0, a0 // t0 <- destination buffer
+    li    t6, 128 // a4 <- avl
+    mv    t0, a0 // t0 <- destination buffer
 #endif // DISABLE_NTT_FUSED_LEVELS_INIT
 
-// reconstruction level 6, 5, 4, 3 and 2
+// reconstruction for levels 6, 5, 4, 3 and 2
 // register mapping in this loop
 //   a1: start index of input coefficient buffer
 //   a4: avl
@@ -82,6 +103,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //   t1: q
 //   t2: current address of twiddle factor for level 5
 //   t4: 2^32 // q
+//   t5: address of twiddle factor for level 3 (loop invariant)
 //   t6: sizeof(int) * vl => byte address increment update
 .loop_reconstruct_level_6_5_4_3_2:
 #ifndef DISABLE_NTT_FUSED_LEVELS_PERMUTE
@@ -154,13 +176,14 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 
     vsetvli    a6, x0, e32, m8, ta, ma
     // assume t1 == 3329 and t4 == 1290167
+    // loading of twiddle factors for level 3 in v16v17 is anticipated
 #ifdef USE_VREM_MODULO
     vrem.vx v8, v8, t1 // to be replaced by Barrett's reduction
-	vl2re32.v v16, (t5) // twiddle factors for level 3
+    vl2re32.v v16, (t5) // twiddle factors for level 3
 #else
     vmulh.vx v16, v8, t4
     vnmsac.vx v8, t1, v16
-	vl2re32.v v16, (t5) // twiddle factors for level 3
+    vl2re32.v v16, (t5) // twiddle factors for level 3
 #endif
 
 #endif // DISABLE_NTT_FUSED_LEVELS_LVL4
@@ -268,16 +291,16 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
-	li a4, 32 // a4 <= avl = half_n = t6 / 2 = 32
-	// 
-	// t3 <- coeffs_a
-	mv	even_coeffs_addr, a0
-	// 
+    li a4, 32 // a4 <= avl = half_n = t6 / 2 = 32
+    // 
+    // t3 <- coeffs_a
+    mv    even_coeffs_addr, a0
+    // 
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
-	mul t2, a5, t6 // 2 * j * half_n = j * n
-	// sll a7, a7, 2 // sizeof(int)=4 * 2 * j * half_n
-	sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs
-	// 
+    mul t2, a5, t6 // 2 * j * half_n = j * n
+    // sll a7, a7, 2 // sizeof(int)=4 * 2 * j * half_n
+    sh2add even_coeffs_addr, t2, even_coeffs_addr // t3 <- even_coeffs
+    // 
     //         int* odd_coeffs = even_coeffs + half_n;
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     //         int* twiddleFactor = rootPowers[local_level];
@@ -356,11 +379,11 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     //     for (int j = 0; j < m; j++) {
     //         size_t avl = half_n;
     li a4, 64 // a4 <= avl = half_n = 64
-	// 
+    // 
     //         int* even_coeffs = coeffs_a + 2 * j * half_n;
-	// t3 <- coeffs_a = even_coeffs_addr
-	mv	even_coeffs_addr, a0
-	// 
+    // t3 <- coeffs_a = even_coeffs_addr
+    mv    even_coeffs_addr, a0
+    // 
     //         int* odd_coeffs = even_coeffs + half_n;
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     //         int* twiddleFactor = rootPowers[local_level];
@@ -423,7 +446,7 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     ret
 .ntt_correction_level_0_j_loop:
     li a4, 64 // a4 <= avl = half_n = 64
-	mv	even_coeffs_addr, a0
+    mv    even_coeffs_addr, a0
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
     mv twiddle_factors_addr, a2 // t4 <- rootPowers[local_level=0]
 
