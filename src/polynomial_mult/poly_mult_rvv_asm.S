@@ -496,8 +496,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 // a1: lhs input buffer
 // a2: rhs input buffer
 // Note: This function does not perform correction at the end of the Barrett's modulo reduction
-//       which means that result output are in [0; 2*q[ instead of [0; q[ (which would have required
-//       extra instuctions and will be carried out by the final inverse NTT anyway)
+//       which means that result elements are in the [0; 2*q[ range instead of [0; q[
+//       (which would have required extra instuctions and will be carried out by
+//       the final inverse NTT anyway)
 .globl    rvv_ntt_mult_scale_asm # -- Begin function rvv_ntt_transform_asm_internal
     .p2align    1
     .type    rvv_ntt_mult_scale_asm,@function
@@ -540,7 +541,7 @@ rvv_ntt_mult_scale_asm:       # @rvv_ntt_transform_asm_internal
     // first multiplication uses pre-computed b*2^32 // q = (3303 << 32) / 3329
     // as in degree scaling, this factor is constant. This does not reduce
     // the number of instructions but allows to use an instruction which can be
-    // parallelize with the raw degree scaling multiplication above.
+    // parallelized with the raw degree scaling multiplication above.
 #ifdef USE_VREM_MODULO
     vrem.vx v16, v24, a6 // to be replaced by Barrett's reduction
 #else
