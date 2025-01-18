@@ -183,6 +183,8 @@ BENCH_2OP_WV_VEC_INSN(vwadd)
 BENCH_2OP_WV_VEC_INSN(vwsub)
 BENCH_2OP_WVV_VEC_INSN(vwadd)
 BENCH_2OP_WVV_VEC_INSN(vwmul)
+BENCH_2OP_WVV_VEC_INSN(vfwadd)
+BENCH_2OP_WVV_VEC_INSN(vfwmul)
 BENCH_2OP_VV_VEC_INSN(vrgather)
 BENCH_2OP_VS_VEC_INSN(vredsum)
 BENCH_2OP_VS_VEC_INSN(vwredsum)
@@ -238,6 +240,9 @@ int main(void) {
 
         BENCH_VEC_WV_INSN_TC(vwadd)
         BENCH_VEC_WV_INSN_TC(vwsub)
+
+        BENCH_VEC_VV_INSN_TC(vfwadd)
+        BENCH_VEC_VV_INSN_TC(vfwmul)
 
         BENCH_VEC_VV_INSN_TC(vwmul)
 

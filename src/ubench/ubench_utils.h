@@ -108,7 +108,7 @@ ubench_result_t bench_lat_##op(size_t n) { \
     asm volatile( \
         "li t0, 7\n" \
         "li t1, 0xcafebebe1337beef\n" \
-        "li t2, 0xcafebebe1337beef\n" \
+        "li t2, 0xbeefcafebebe1337\n" \
     "1:\n" \
 	    "add t1, t2, t1\n"\
 	    "add t1, t2, t1\n"\
@@ -313,6 +313,7 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
 
 #define BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
 ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
+    size_t avl = 65536; \
     size_t cnt = n / 16; \
     size_t vl = 0; \
     long start = read_perf_counter(); \
@@ -320,7 +321,7 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
         "vsetvli t0, x0, e32, m" #LMUL ", ta, ma\n" \
         "li t0, 0x3c003c00\n" \
         "vmv.v.x v8, t0\n" \
-        "vsetvli %[vl], x0, e" #elt ", m" #LMUL ", ta, ma\n" \
+        "vsetvli %[vl], %[avl], e" #elt ", m" #LMUL ", ta, ma\n" \
         "vid.v v16\n" \
         "vor.vv v16, v16, v8\n" \
         "vid.v v24\n" \
@@ -344,7 +345,7 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
         #op "." #suffix " v8, v16, v24\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
-    : [cnt]"+r"(cnt), [vl]"+r"(vl) \
+    : [cnt]"+r"(cnt), [vl]"+r"(vl), [avl]"+r"(avl) \
     : \
     : "t0" \
     ); \
