@@ -242,7 +242,7 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
 
 /** Build a latency benchmark for a 2-operand floating-point instruction
  *
- * Latency is measure by building a chain of dependent instructions
+ * Latency is measured by building a chain of dependent instructions
  */
 #define BENCH_LAT_2OP_FPD_INSN(op) BENCH_LAT_2OP_FP_INSN(op, d, "0x3fcdbeef3fcdbeef", "0x4abdcafe4abdcafe")
 #define BENCH_LAT_2OP_FPS_INSN(op) BENCH_LAT_2OP_FP_INSN(op, s, "0xffffffff3fcdbeef", "0xffffffff4abdcafe")
@@ -307,19 +307,19 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
 }
 
 
-#define BENCH_LAT_VEC_INSN_TC(op, LMUL, elt) (ubench_t){.bench = bench_lat_##op##_m##LMUL##_e##elt, .label= "latency " #op " m" #LMUL " e" #elt }
-#define BENCH_THROUGHPUT_VEC_INSN_TC(op, LMUL, elt) (ubench_t){.bench = bench_throughput_##op##_m##LMUL##_e##elt, .label= "throughput " #op " m" #LMUL " e" #elt }
+#define BENCH_LAT_VEC_INSN_TC(op, LMUL, elt, suffix) (ubench_t){.bench = bench_lat_##op##_m##LMUL##_e##elt##_##suffix, .label= "latency " #op " m" #LMUL " e" #elt " " #suffix}
+#define BENCH_THROUGHPUT_VEC_INSN_TC(op, LMUL, elt, suffix) (ubench_t){.bench = bench_throughput_##op##_m##LMUL##_e##elt##_##suffix, .label= "throughput " #op " m" #LMUL " e" #elt " " #suffix}
 
 /** Build a latency benchmark for a 2-operand vector instruction
  *
  * Latency is measure by building a chain of dependent instructions
  */
-#define BENCH_LAT_2OP_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vv")
-#define BENCH_LAT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vs") 
-#define BENCH_LAT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "wv") 
+#define BENCH_LAT_2OP_VV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vv)
+#define BENCH_LAT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vs) 
+#define BENCH_LAT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, wv) 
 
 #define BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
-ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
+ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     size_t cnt = n / 16; \
     size_t vl = 0; \
     long start = read_perf_counter(); \
@@ -333,22 +333,22 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
         "vid.v v24\n" \
         "vor.vv v24, v24, v8\n" \
     "1:\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
-        #op "." suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
+        #op "." #suffix " v8, v16, v24\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt), [vl]"+r"(vl) \
@@ -379,12 +379,12 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt(size_t n) { \
     }; \
 }
 
-#define BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vv") 
-#define BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "vs")
-#define BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, "wv")
+#define BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vv) 
+#define BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vs)
+#define BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, wv)
 
 #define BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
-ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt(size_t n) { \
+ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     size_t cnt = n / 18; \
     size_t vl = 0; \
     long start = read_perf_counter(); \
@@ -398,24 +398,24 @@ ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt(size_t n) { \
         "vid.v v24\n" \
         "vor.vv v24, v24, v8\n" \
     "1:\n" \
-        #op "." suffix " v4, v0, v8\n" \
-        #op "." suffix " v12, v16, v20\n" \
-        #op "." suffix " v24, v28, v0\n" \
-        #op "." suffix " v8, v0, v20\n" \
-        #op "." suffix " v16, v4, v28\n" \
-        #op "." suffix " v24, v28, v0\n" \
-        #op "." suffix " v4, v0, v8\n" \
-        #op "." suffix " v12, v16, v20\n" \
-        #op "." suffix " v24, v28, v0\n" \
-        #op "." suffix " v8, v0, v20\n" \
-        #op "." suffix " v16, v4, v28\n" \
-        #op "." suffix " v24, v28, v0\n" \
-        #op "." suffix " v4, v0, v8\n" \
-        #op "." suffix " v12, v16, v20\n" \
-        #op "." suffix " v24, v28, v0\n" \
-        #op "." suffix " v8, v0, v20\n" \
-        #op "." suffix " v16, v4, v28\n" \
-        #op "." suffix " v24, v28, v0\n" \
+        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v12, v16, v20\n" \
+        #op "." #suffix " v24, v28, v0\n" \
+        #op "." #suffix " v8, v0, v20\n" \
+        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v24, v28, v0\n" \
+        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v12, v16, v20\n" \
+        #op "." #suffix " v24, v28, v0\n" \
+        #op "." #suffix " v8, v0, v20\n" \
+        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v24, v28, v0\n" \
+        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v12, v16, v20\n" \
+        #op "." #suffix " v24, v28, v0\n" \
+        #op "." #suffix " v8, v0, v20\n" \
+        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v24, v28, v0\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt), [vl]"+r"(vl) \

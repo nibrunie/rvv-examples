@@ -11,6 +11,9 @@
 #ifndef NUM_TESTS
 #define NUM_TESTS 10
 #endif
+#ifndef TEST_SIZE
+#define TEST_SIZE 65536
+#endif
 
 /** Declaring various softmax implementation benchmarks **/
 ubench_result_t baseline_bench(size_t n);
@@ -103,14 +106,21 @@ BENCH_THROUGHPUT_2OP_FPS_INSN(fdiv)
 BENCH_THROUGHPUT_2OP_FPS_INSN(fmul)
 
 #define BENCH_2OP_VV_VEC_INSN(op) \
-    BENCH_LAT_2OP_VEC_INSN(op, 1, 32) \
-    BENCH_LAT_2OP_VEC_INSN(op, 2, 32) \
-    BENCH_LAT_2OP_VEC_INSN(op, 4, 32) \
-    BENCH_LAT_2OP_VEC_INSN(op, 8, 32) \
-    BENCH_LAT_2OP_VEC_INSN(op, 1, 64) \
-    BENCH_LAT_2OP_VEC_INSN(op, 2, 64) \
-    BENCH_LAT_2OP_VEC_INSN(op, 4, 64) \
-    BENCH_LAT_2OP_VEC_INSN(op, 8, 64) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 1, 16) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 2, 16) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 4, 16) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 8, 16) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 1, 32) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 2, 32) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 4, 32) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 8, 32) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 1, 64) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 2, 64) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 4, 64) \
+    BENCH_LAT_2OP_VV_VEC_INSN(op, 8, 64) \
+    BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 1, 16) \
+    BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 2, 16) \
+    BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 4, 16) \
     BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 1, 32) \
     BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 2, 32) \
     BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 4, 32) \
@@ -118,6 +128,7 @@ BENCH_THROUGHPUT_2OP_FPS_INSN(fmul)
     BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 2, 64) \
     BENCH_THROUGHPUT_2OP_VV_VEC_INSN(op, 4, 64) 
 
+/*
 #define BENCH_VEC_INSN_TC(op) \
         BENCH_LAT_VEC_INSN_TC(op, 1, 32),\
         BENCH_LAT_VEC_INSN_TC(op, 2, 32),\
@@ -133,59 +144,82 @@ BENCH_THROUGHPUT_2OP_FPS_INSN(fmul)
         BENCH_THROUGHPUT_VEC_INSN_TC(op, 1, 64),\
         BENCH_THROUGHPUT_VEC_INSN_TC(op, 2, 64),\
         BENCH_THROUGHPUT_VEC_INSN_TC(op, 4, 64),
+*/
+
+#define BENCH_FUNC_LAT_2OP_LMUL_1_4(op, eltSize, suffix) \
+    BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, 1, eltSize, suffix) \
+    BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, 2, eltSize, suffix) \
+    BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, 4, eltSize, suffix)
+
+/** generate latency benchmark functions for a 2-operand .vs instruction
+ *   spanning LMUL from 1 to 8, and setting SEW to eltSize
+ */
+#define BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, eltSize, suffix) \
+    BENCH_FUNC_LAT_2OP_LMUL_1_4(op, eltSize, suffix) \
+    BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, 8, eltSize, suffix)
+
+/** generate throughput benchmark functions for a 2-operand .vs instruction
+ *   spanning LMUL from 1 to 4, and setting SEW to eltSize
+ */
+#define BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, eltSize, suffix) \
+    BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, 1, eltSize, suffix) \
+    BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, 2, eltSize, suffix) \
+    BENCH_THROUGHPUT_2OP_SUFFIX_VEC_INSN(op, 4, eltSize, suffix)
 
 #define BENCH_2OP_VS_VEC_INSN(op) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 1, 32) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 2, 32) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 4, 32) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 8, 32) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 1, 64) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 2, 64) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 4, 64) \
-    BENCH_LAT_2OP_VS_VEC_INSN(op, 8, 64) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 1, 32) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 2, 32) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 4, 32) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 1, 64) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 2, 64) \
-    BENCH_THROUGHPUT_2OP_VS_VEC_INSN(op, 4, 64) 
+    BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, 32, vs) \
+    BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, 64, vs) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 32, vs) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 64, vs) \
+    // BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, 16, vs) \
+    // BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 16, vs) \
 
 #define BENCH_2OP_WV_VEC_INSN(op) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 1, 32) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 2, 32) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 4, 32) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 8, 32) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 1, 16) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 2, 16) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 4, 16) \
-    BENCH_LAT_2OP_WV_VEC_INSN(op, 8, 16) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 1, 32) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 2, 32) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 4, 32) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 1, 16) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 2, 16) \
-    BENCH_THROUGHPUT_2OP_WV_VEC_INSN(op, 4, 16) 
+    BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, 16, wv) \
+    BENCH_FUNC_LAT_2OP_LMUL_SPAN(op, 32, wv) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 16, wv) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 32, wv)
 
-#define BENCH_VEC_WV_INSN_TC(op) \
-        BENCH_LAT_VEC_INSN_TC(op, 1, 32),\
-        BENCH_LAT_VEC_INSN_TC(op, 2, 32),\
-        BENCH_LAT_VEC_INSN_TC(op, 4, 32),\
-        BENCH_LAT_VEC_INSN_TC(op, 1, 16),\
-        BENCH_LAT_VEC_INSN_TC(op, 2, 16),\
-        BENCH_LAT_VEC_INSN_TC(op, 4, 16),\
-        BENCH_THROUGHPUT_VEC_INSN_TC(op, 1, 32),\
-        BENCH_THROUGHPUT_VEC_INSN_TC(op, 2, 32),\
-        BENCH_THROUGHPUT_VEC_INSN_TC(op, 1, 16),\
-        BENCH_THROUGHPUT_VEC_INSN_TC(op, 2, 16),\
+#define BENCH_VEC_INSN_TC(op, suffix) \
+        BENCH_LAT_VEC_INSN_TC(op, 1, 32, suffix),\
+        BENCH_LAT_VEC_INSN_TC(op, 2, 32, suffix),\
+        BENCH_LAT_VEC_INSN_TC(op, 4, 32, suffix),\
+        BENCH_THROUGHPUT_VEC_INSN_TC(op, 1, 32, suffix),\
+        BENCH_THROUGHPUT_VEC_INSN_TC(op, 2, 32, suffix),\
+        // BENCH_LAT_VEC_INSN_TC(op, 1, 16, suffix),\
+        // BENCH_LAT_VEC_INSN_TC(op, 2, 16, suffix),\
+        // BENCH_LAT_VEC_INSN_TC(op, 4, 16, suffix),\
+        // BENCH_THROUGHPUT_VEC_INSN_TC(op, 1, 16, suffix),\
+        // BENCH_THROUGHPUT_VEC_INSN_TC(op, 2, 16, suffix),\
 
+#define BENCH_VEC_WV_INSN_TC(op)  BENCH_VEC_INSN_TC(op, wv)
+#define BENCH_VEC_VV_INSN_TC(op)  BENCH_VEC_INSN_TC(op, vv)
+#define BENCH_VEC_VS_INSN_TC(op)  BENCH_VEC_INSN_TC(op, vs)
+
+/** generating benchmark function for a widening instruction
+ *  with .vv suffix (cannot be evaluated on LMUL=8)
+ */
+#define BENCH_2OP_WVV_VEC_INSN(op) \
+    BENCH_FUNC_LAT_2OP_LMUL_1_4(op, 16, vv) \
+    BENCH_FUNC_LAT_2OP_LMUL_1_4(op, 32, vv) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 16, vv) \
+    BENCH_FUNC_THROUGHPUT_2OP_LMUL_1_4(op, 32, vv)
 
 BENCH_2OP_VV_VEC_INSN(vadd)
 BENCH_2OP_VV_VEC_INSN(vor)
 BENCH_2OP_VV_VEC_INSN(vxor)
 BENCH_2OP_VV_VEC_INSN(vsll)
 BENCH_2OP_WV_VEC_INSN(vnsrl)
+BENCH_2OP_WV_VEC_INSN(vwadd)
+BENCH_2OP_WV_VEC_INSN(vwsub)
+BENCH_2OP_WVV_VEC_INSN(vwadd)
+BENCH_2OP_WVV_VEC_INSN(vwmul)
 BENCH_2OP_VV_VEC_INSN(vrgather)
 BENCH_2OP_VS_VEC_INSN(vredsum)
+BENCH_2OP_VS_VEC_INSN(vwredsum)
+BENCH_2OP_VS_VEC_INSN(vredand)
+BENCH_2OP_VS_VEC_INSN(vredor)
+BENCH_2OP_VS_VEC_INSN(vredxor)
 BENCH_2OP_VS_VEC_INSN(vfredosum)
 BENCH_2OP_VS_VEC_INSN(vfredusum)
 BENCH_2OP_VV_VEC_INSN(vfadd)
@@ -222,20 +256,29 @@ int main(void) {
         BENCH_LAT_INSN_TC(fdiv_s),
         BENCH_LAT_INSN_TC(fmul_s),
 
-        BENCH_VEC_INSN_TC(vadd)
-        BENCH_VEC_INSN_TC(vor)
-        BENCH_VEC_INSN_TC(vxor)
-        BENCH_VEC_INSN_TC(vsll)
-        BENCH_VEC_INSN_TC(vfadd)
-        BENCH_VEC_INSN_TC(vfmul)
-        BENCH_VEC_INSN_TC(vfdiv)
-        BENCH_VEC_INSN_TC(vrgather)
+        BENCH_VEC_VV_INSN_TC(vadd)
+        BENCH_VEC_VV_INSN_TC(vor)
+        BENCH_VEC_VV_INSN_TC(vxor)
+        BENCH_VEC_VV_INSN_TC(vsll)
+        BENCH_VEC_VV_INSN_TC(vfadd)
+        BENCH_VEC_VV_INSN_TC(vfmul)
+        BENCH_VEC_VV_INSN_TC(vfdiv)
+        BENCH_VEC_VV_INSN_TC(vrgather)
 
         BENCH_VEC_WV_INSN_TC(vnsrl)
 
-        BENCH_VEC_INSN_TC(vredsum)
-        BENCH_VEC_INSN_TC(vfredosum)
-        BENCH_VEC_INSN_TC(vfredusum)
+        BENCH_VEC_WV_INSN_TC(vwadd)
+        BENCH_VEC_WV_INSN_TC(vwsub)
+
+        BENCH_VEC_VV_INSN_TC(vwmul)
+
+        BENCH_VEC_VS_INSN_TC(vredsum)
+        BENCH_VEC_VS_INSN_TC(vwredsum)
+        BENCH_VEC_VS_INSN_TC(vredxor)
+        BENCH_VEC_VS_INSN_TC(vredor)
+        BENCH_VEC_VS_INSN_TC(vredand)
+        BENCH_VEC_VS_INSN_TC(vfredosum)
+        BENCH_VEC_VS_INSN_TC(vfredusum)
 
         BENCH_THROUGHPUT_INSN_TC(add),
         BENCH_THROUGHPUT_INSN_TC(div),
@@ -267,7 +310,7 @@ int main(void) {
     printf("label, test-size, counter-value, metric-per-element, element-per-metric, error(s)\n");
 #endif
 
-    size_t testSizes[] = {65536};
+    size_t testSizes[] = {TEST_SIZE};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];
@@ -285,7 +328,6 @@ int main(void) {
         }
 
         for (int j = 0; j < NUM_TESTS; ++j) {
-            // softmax benchmarks. iterating over all existing implementation for this given input set
             for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(ubench_t); benchId++)
             {
 #               ifdef VERY_VERBOSE
