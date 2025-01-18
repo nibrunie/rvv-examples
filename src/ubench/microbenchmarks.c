@@ -279,6 +279,10 @@ int main(void) {
         BENCH_THROUGHPUT_INSN_TC(fdiv_s),
         BENCH_THROUGHPUT_INSN_TC(fmul_s),
     };
+
+    // list of buffer sizes for memory copy throughput benchmark
+    size_t memCopySizes[] = {1024, 4096, 16384, 32768, 49152, 65536, (3ull << 15), (1ull << 17), (1ull << 20), (1ull << 24), (1ull << 27)};
+
 #ifndef VERBOSE
     // condensed display
     printf("label, test-size, counter-value, metric-per-element, element-per-metric, error(s)\n");
@@ -336,6 +340,37 @@ int main(void) {
                    bench_result.errors);
 #           endif
         }
+    }
+
+    // memory copy benchmarks
+    size_t nRuns = 10;
+
+    size_t maxSize = 0;
+    for (size_t testId = 0; testId < sizeof(memCopySizes) / sizeof(size_t); testId++) maxSize = maxSize < memCopySizes[testId] ? memCopySizes[testId] : maxSize;
+
+    char* memSrc = (char*) malloc(maxSize);
+    char* memDst = (char*) malloc(maxSize);
+    for (int i = 0; i < maxSize; i++) memSrc[i] = rand();
+
+    for (size_t testId = 0; testId < sizeof(memCopySizes) / sizeof(size_t); testId++) {
+        char* dst = memDst;
+        char* src = memSrc;
+        char* swap = NULL;
+        size_t localSize = memCopySizes[testId];
+        long start = read_perf_counter();
+        for (int runId = 0; runId < nRuns; runId++) {
+            memcpy(dst, src, localSize);
+
+            // swapping source/destination address for the next run
+            swap = dst;
+            dst = src;
+            src = swap;
+        }
+        long stop = read_perf_counter();
+        long delta = stop - start;
+
+        printf("memcpy %lld %lld %.3f\n", localSize, delta, localSize / (double) delta);
+
     }
 
     return 0;
