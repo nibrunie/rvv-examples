@@ -310,13 +310,6 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
 #define BENCH_LAT_VEC_INSN_TC(op, LMUL, elt, suffix) (ubench_t){.bench = bench_lat_##op##_m##LMUL##_e##elt##_##suffix, .label= "latency " #op " m" #LMUL " e" #elt " " #suffix}
 #define BENCH_THROUGHPUT_VEC_INSN_TC(op, LMUL, elt, suffix) (ubench_t){.bench = bench_throughput_##op##_m##LMUL##_e##elt##_##suffix, .label= "throughput " #op " m" #LMUL " e" #elt " " #suffix}
 
-/** Build a latency benchmark for a 2-operand vector instruction
- *
- * Latency is measure by building a chain of dependent instructions
- */
-#define BENCH_LAT_2OP_VV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vv)
-#define BENCH_LAT_2OP_VS_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, vs) 
-#define BENCH_LAT_2OP_WV_VEC_INSN(op, LMUL, elt) BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, wv) 
 
 #define BENCH_LAT_2OP_SUFFIX_VEC_INSN(op, LMUL, elt, suffix) \
 ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
