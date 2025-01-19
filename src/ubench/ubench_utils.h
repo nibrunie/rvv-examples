@@ -134,12 +134,12 @@ ubench_result_t bench_lat_##op(size_t n) { \
 
 
 #define BENCH_THROUGHPUT_2OP_INSN(op) \
-ubench_result_t bench_throughput_##op(size_t n) { \
+ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v0, uint64_t v1) { \
     long start = read_perf_counter(); \
     size_t cnt = n / 13; \
     asm volatile( \
-        "li a0, 3\n" \
-        "li a1, 0xcafebebe1337beef\n" \
+        "mv a0, %[v0]\n" \
+        "mv a1, %[v1]\n" \
     "1:\n" \
         #op " a2, a1, a0\n" \
         #op " a3, a1, a0\n" \
@@ -157,7 +157,7 @@ ubench_result_t bench_throughput_##op(size_t n) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : \
+    : [v0]"r"(v0), [v1]"r"(v1) \
     : "a0", "a1", "a2", "a3", "a4", \
       "a5", "a6", "a7", \
       "t0", "t1", "t2", "t3", "t4", \
@@ -170,6 +170,9 @@ ubench_result_t bench_throughput_##op(size_t n) { \
         .errors = 0 \
     }; \
 }\
+ubench_result_t bench_throughput_##op(size_t n) { \
+    return bench_throughput_##op##_values(n, 3, 0xcafebebe1337beefull); \
+}\
 
 #define BENCH_LAT_INSN_TC(op) (ubench_t){.bench = bench_lat_##op,                .label= "latency " #op }
 #define BENCH_THROUGHPUT_INSN_TC(op) (ubench_t){.bench = bench_throughput_##op,  .label= "throughput " #op}
@@ -177,18 +180,16 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 
 // #define BENCH_THROUGHPUT_2OP_FPD_INSN(op) 
 
-#define BENCH_THROUGHPUT_2OP_FPD_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, d, "0x3fcdbeef3fcdbeef", "0x4abdcafe4abdcafe")
-#define BENCH_THROUGHPUT_2OP_FPS_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, s, "0xffffffff3fcdbeef", "0xffffffff4abdcafe")
+#define BENCH_THROUGHPUT_2OP_FPD_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, d, 0x3fcdbeef3fcdbeefull, 0x4abdcafe4abdcafeull)
+#define BENCH_THROUGHPUT_2OP_FPS_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, s, 0xffffffff3fcdbeefull, 0xffffffff4abdcafeull)
 
 #define BENCH_THROUGHPUT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
-ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
+ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, uint64_t v1) { \
     size_t cnt = n / 13; \
     long start = read_perf_counter(); \
     asm volatile( \
-        "li t0, " init_ft0 "\n" \
-        "li t1, " init_ft1 "\n" \
-        "fmv." #fmt_suffix ".x fa0, t0\n" \
-        "fmv." #fmt_suffix ".x fa1, t1\n" \
+        "fmv." #fmt_suffix ".x fa0, %[v0]\n" \
+        "fmv." #fmt_suffix ".x fa1, %[v1]\n" \
     "1:\n" \
         #op "." #fmt_suffix " fa2, fa1, fa0\n" \
         #op "." #fmt_suffix " fa3, fa1, fa0\n" \
@@ -206,7 +207,7 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : \
+    : [v0]"r"(v0), [v1]"r"(v1) \
     : "fa0", "fa1", "fa2", "fa3", "fa4", \
       "fa5", "fa6", "fa7", \
       "ft0", "ft1", "ft2", "ft3", "ft4", \
@@ -239,6 +240,9 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
         .errors = 0 \
     }; \
 }\
+ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
+    return bench_throughput_##op##_##fmt_suffix##_values(n, init_ft0, init_ft1); \
+} \
 
 /** Build a latency benchmark for a 2-operand floating-point instruction
  *
@@ -392,23 +396,23 @@ ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { 
         "vid.v v24\n" \
         "vor.vv v24, v24, v8\n" \
     "1:\n" \
-        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v4,  v0,  v8\n" \
         #op "." #suffix " v12, v16, v20\n" \
         #op "." #suffix " v24, v28, v0\n" \
-        #op "." #suffix " v8, v0, v20\n" \
-        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v8,  v0,  v20\n" \
+        #op "." #suffix " v16, v4,  v28\n" \
         #op "." #suffix " v24, v28, v0\n" \
-        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v4,  v0,  v8\n" \
         #op "." #suffix " v12, v16, v20\n" \
         #op "." #suffix " v24, v28, v0\n" \
-        #op "." #suffix " v8, v0, v20\n" \
-        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v8,  v0,  v20\n" \
+        #op "." #suffix " v16, v4,  v28\n" \
         #op "." #suffix " v24, v28, v0\n" \
-        #op "." #suffix " v4, v0, v8\n" \
+        #op "." #suffix " v4,  v0,  v8\n" \
         #op "." #suffix " v12, v16, v20\n" \
         #op "." #suffix " v24, v28, v0\n" \
-        #op "." #suffix " v8, v0, v20\n" \
-        #op "." #suffix " v16, v4, v28\n" \
+        #op "." #suffix " v8,  v0,  v20\n" \
+        #op "." #suffix " v16, v4,  v28\n" \
         #op "." #suffix " v24, v28, v0\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
