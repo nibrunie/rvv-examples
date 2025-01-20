@@ -367,7 +367,7 @@ int main(void) {
             src = swap;
         }
         long stop = read_perf_counter();
-        long delta = stop - start;
+        double delta = (stop - start) / (double) nRuns;
 
         printf("memcpy %lld %lld %.3f\n", localSize, delta, localSize / (double) delta);
 
