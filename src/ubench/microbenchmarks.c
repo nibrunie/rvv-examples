@@ -197,6 +197,12 @@ BENCH_2OP_VV_VEC_INSN(vfadd)
 BENCH_2OP_VV_VEC_INSN(vfmul)
 BENCH_2OP_VV_VEC_INSN(vfdiv)
 
+/** generic data generator */
+void my_data_gen(uint64_t res[]) {
+    res[0] = 1;
+    res[1] = 2;
+}
+
 int main(void) {
     int i;
     ubench_t benchmarks[] = {
@@ -342,10 +348,6 @@ int main(void) {
         }
     }
 
-    void my_data_gen(uint64_t res[]) {
-        res[0] = 1;
-        res[1] = 2;
-    }
 
     // data dependent benchmarking
     ubench_data_t data_benchmarks[] = {
