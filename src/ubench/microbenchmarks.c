@@ -408,7 +408,7 @@ int main(void) {
     }
 
     // memory copy benchmarks
-    size_t nRuns = 10;
+    size_t nRuns = 20;
 
     size_t maxSize = 0;
     for (size_t testId = 0; testId < sizeof(memCopySizes) / sizeof(size_t); testId++) maxSize = maxSize < memCopySizes[testId] ? memCopySizes[testId] : maxSize;
@@ -434,7 +434,7 @@ int main(void) {
         long stop = read_perf_counter();
         double delta = (stop - start) / (double) nRuns;
 
-        printf("memcpy %lld %lld %.3f\n", localSize, delta, localSize / (double) delta);
+        printf("memcpy %lld %.3f %.3f\n", localSize, delta, localSize / delta);
 
     }
 
