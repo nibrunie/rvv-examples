@@ -18,12 +18,26 @@ static ubench_result_t accumulate_ubench_result(ubench_result_t res, ubench_resu
 /** function type for micro-benchmarks */
 typedef ubench_result_t (bench_func_t)(size_t);
 
-/** Descriptor structure for softmax benchmark */
+/** function type for micro-benchmarks with customizable input data */
+typedef ubench_result_t (bench_data_func_t)(size_t, uint64_t []);
+
+/** function type for customizable data generator */
+typedef void (data_gen_t)(uint64_t[]);
+
+/** Descriptor structure for basic micro-benchmark */
 typedef struct {
     bench_func_t* bench;
     ubench_result_t result;
     char label[256];
 } ubench_t;
+
+/** Descriptor structure for micro-benchmark with custom data generation */
+typedef struct {
+    bench_data_func_t* bench;
+    data_gen_t* data_gen;
+    ubench_result_t result;
+    char label[256];
+} ubench_data_t;
 
 #define BENCH_0OP_INSN(op) \
 ubench_result_t bench_lat_##op(size_t n) { \
@@ -134,7 +148,7 @@ ubench_result_t bench_lat_##op(size_t n) { \
 
 
 #define BENCH_THROUGHPUT_2OP_INSN(op) \
-ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v0, uint64_t v1) { \
+ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v[2]) { \
     long start = read_perf_counter(); \
     size_t cnt = n / 13; \
     asm volatile( \
@@ -157,7 +171,7 @@ ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v0, uint64_t v
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : [v0]"r"(v0), [v1]"r"(v1) \
+    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "a0", "a1", "a2", "a3", "a4", \
       "a5", "a6", "a7", \
       "t0", "t1", "t2", "t3", "t4", \
@@ -171,7 +185,8 @@ ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v0, uint64_t v
     }; \
 }\
 ubench_result_t bench_throughput_##op(size_t n) { \
-    return bench_throughput_##op##_values(n, 3, 0xcafebebe1337beefull); \
+    uint64_t data[2] = {3, 0xcafebebe1337beefull}; \
+    return bench_throughput_##op##_values(n, data); \
 }\
 
 #define BENCH_LAT_INSN_TC(op) (ubench_t){.bench = bench_lat_##op,                .label= "latency " #op }

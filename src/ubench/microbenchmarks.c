@@ -342,6 +342,69 @@ int main(void) {
         }
     }
 
+    void my_data_gen(uint64_t res[]) {
+        res[0] = 1;
+        res[1] = 2;
+    }
+
+    // data dependent benchmarking
+    ubench_data_t data_benchmarks[] = {
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=my_data_gen, .label="data division benchmark"},
+    };
+    for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
+    {
+        size_t n = testSizes[testId];
+#       ifdef VERBOSE 
+        printf("--------------------------------------------------------------------------------\n");
+        printf("--------------------------------------------------------------------------------\n");
+        printf("Data Benchmarking with test size %d.\n", n);
+#       endif
+
+        // reset benchmark results
+        for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
+        {
+            data_benchmarks[benchId].result.errors = 0;
+            data_benchmarks[benchId].result.perf_count = 0;
+        }
+
+        for (int j = 0; j < NUM_TESTS; ++j) {
+            for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
+            {
+#               ifdef VERY_VERBOSE
+                printf("running method: %s\n", benchmarks[benchId].label);
+#               endif // VERY_VERBOSE
+
+                uint64_t data[2] = {0};
+                data_benchmarks[benchId].data_gen(data);
+                ubench_result_t local_result = data_benchmarks[benchId].bench(n, data);
+                data_benchmarks[benchId].result = accumulate_ubench_result(data_benchmarks[benchId].result, local_result);
+            }
+        }
+        // display results
+        for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
+        {
+            ubench_result_t bench_result = data_benchmarks[benchId].result;
+            bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
+
+
+#           ifdef VERBOSE 
+            printf("--------------------------------------------------------------------------------\n");
+            printf("%s used %d " PERF_METRIC "(s) to evaluate multiplication on a degree %d polynomial.\n",
+                data_benchmarks[benchId].label, bench_result.perf_count, n);
+            printf("  " PERF_METRIC " per run:        %d\n", bench_result.perf_count);
+            printf("  " PERF_METRIC " per element:    %.3f\n", (double) bench_result.perf_count / (n * bench_result.elt_per_op));
+            printf("  element(s) per " PERF_METRIC ": %.2e\n", (double) (n * bench_result.elt_per_op) / bench_result.perf_count);
+            printf("  error(s):  %d\n", bench_result.errors);
+#           else
+            // condensed display
+            printf("%s, %d, %d, %.3f, %.2f, %d\n", 
+                   data_benchmarks[benchId].label, n, bench_result.perf_count,
+                   (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
+                   bench_result.errors);
+#           endif
+        }
+    }
+
     // memory copy benchmarks
     size_t nRuns = 10;
 
