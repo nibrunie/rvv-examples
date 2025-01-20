@@ -265,6 +265,18 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 //
 //   half_n is not materialized (we use t6 >> 1 instead)
 //   t2 is used as a temporary register whenever one is need
+
+    li a4, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
+    // setting outside the loop since vl should be uniform for all iterations
+    // mask policy for level 0 must be mu (mask-undisturbed) so we need to set mu here
+    vsetvli    x0, a4, e32, m8, ta, mu
+    //         int* twiddleFactor = rootPowers[local_level];
+    // rootPowers offset for local_level=1 is 256
+    addi twiddle_factors_addr, a2, 256 // t4 <- rootPowers[local_level=1]
+    // There are only 32 twiddle factors for level 1 so a single LMUL=8 vle32 is enough
+    // and can be factorized across the two AVL loop
+    //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
+    vle32.v    v0, (twiddle_factors_addr)
     //    n = 16;
     //    local_level = 3;
     li t5, 1 // t5 <= local_level
@@ -282,11 +294,6 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
 .ntt_level:
     // int j = 0
     li a5, 0
-
-    li a4, 32 // minimum avl to get vl = vlmax =32 (for e32 and VLEN=128)
-    // setting outside the loop since vl should be uniform for all iterations
-    // mask policy for level 0 must be mu (mask-undisturbed) so we need to set mu here
-    vsetvli    x0, a4, e32, m8, ta, mu
 // level 1
 .ntt_j_loop:
     //     for (int j = 0; j < m; j++) {
@@ -303,16 +310,9 @@ rvv_ntt_transform_asm_internal:       # @rvv_ntt_transform_asm_internal
     // 
     //         int* odd_coeffs = even_coeffs + half_n;
     sh1add odd_coeffs_addr, t6, even_coeffs_addr // t1 <- odd_coeffs = evens_coeffs + sizeof(int) * half_n = 4 * n / 2 = 2 *n
-    //         int* twiddleFactor = rootPowers[local_level];
-    // rootPowers offset for local_level=1 is 256
-    addi twiddle_factors_addr, a2, 256 // t4 <- rootPowers[local_level=1]
     //
     //         for (size_t vl; avl > 0; avl -= vl, even_coeffs += vl, odd_coeffs += vl, twiddleFactor += vl)
     //         {
-    // There are only 32 twiddle factors for level 1 so a single LMUL=8 vle32 is enough
-    // and can be factorized across the two AVL loop
-    //             TYPE_LMUL(vint32) vec_twiddleFactor = FUNC_LMUL(__riscv_vle32_v_i32)((int*) twiddleFactor, vl);
-    vle32.v    v0, (t4)
     //             vl = FUNC_LMUL(__riscv_vsetvl_e32)(avl);
 .ntt_level_avl_loop:
     //             TYPE_LMUL(vint32) vec_odd_coeffs = FUNC_LMUL(__riscv_vle32_v_i32)((int*) odd_coeffs, vl);

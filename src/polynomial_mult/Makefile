@@ -18,7 +18,7 @@ VLEN?=128
 # path to proxy-kernel (pk)
 PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk64 
 
-BUILD_ARCH=rv64gcv_zba_zvbb1p0 -menable-experimental-extensions
+BUILD_ARCH=rv64gcv_zba
 SIM_ARCH=rv64gcv_zba_zvbb
 
 # SIMULATOR
