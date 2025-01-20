@@ -203,6 +203,24 @@ void my_data_gen(uint64_t res[]) {
     res[1] = 2;
 }
 
+void my_memcpy(void* dst, void* src, size_t nBytes) {
+
+    __asm volatile (
+        "mv t0, %[nBytes]\n" // avl
+        "1:\n"
+        "vsetvli t1, t0, e8, m1, ta, ma\n"
+        "vle8.v v8, (%[src])\n"
+        "vse8.v v8, (%[dst])\n"
+        "add %[src], %[src], t1\n"
+        "add %[dst], %[dst], t1\n"
+        "sub t0, t0, t1\n"
+        "bnez t0, 1b\n"
+        : [src]"+r"(src), [dst]"+r"(dst)
+        : [nBytes]"r"(nBytes)
+        : "t0"
+    );
+}
+
 int main(void) {
     int i;
     ubench_t benchmarks[] = {
@@ -287,7 +305,7 @@ int main(void) {
     };
 
     // list of buffer sizes for memory copy throughput benchmark
-    size_t memCopySizes[] = {1024, 4096, 16384, 32768, 49152, 65536, (3ull << 15), (1ull << 17), (1ull << 20), (1ull << 24), (1ull << 27)};
+    size_t memCopySizes[] = {1024, 4096, 16384, 32768, 49152, 65536}; //, (3ull << 15), (1ull << 17), (1ull << 20), (1ull << 24), (1ull << 27)};
 
 #ifndef VERBOSE
     // condensed display
@@ -424,7 +442,7 @@ int main(void) {
         size_t localSize = memCopySizes[testId];
         long start = read_perf_counter();
         for (int runId = 0; runId < nRuns; runId++) {
-            memcpy(dst, src, localSize);
+            my_memcpy(dst, src, localSize);
 
             // swapping source/destination address for the next run
             swap = dst;
