@@ -203,8 +203,10 @@ void my_data_gen(uint64_t res[]) {
     res[1] = 2;
 }
 
+#ifndef MEMCPY_LMUL
 #define MEMCPY_LMUL 8
 #define MEMCPY_SRC_ALIGN_MASK 127
+#endif
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
@@ -226,16 +228,18 @@ void my_memcpy(void* dst, void* src, size_t nBytes) {
         // computing AVL % VLMAX remainder to align loop on VLMAX (and save vsetvli inside the loop)
         "and t2, t0, t2\n"     
         "sub t0, t0, t2\n"     // subtracting AVL remainder from AVL to get VLMAX remaining bytes to load
+	"srli t0, t0, 2\n" // byte to e32 AVL
 
         // hoisting vsetvli outside the loop
-        "vsetvli t1, t0, e8, m" STR(MEMCPY_LMUL) ", ta, ma\n"
+        "vsetvli t1, t0, e32, m" STR(MEMCPY_LMUL) ", ta, ma\n"
+	"slli t3, t1, 2\n" // VL for SEw=32 to number of bytes
 
         // main copy loop
         "1:\n"
-        "vle8.v v8, (%[src])\n"
-        "vse8.v v8, (%[dst])\n"
-        "add %[src], %[src], t1\n"
-        "add %[dst], %[dst], t1\n"
+        "vle32.v v8, (%[src])\n"
+        "vse32.v v8, (%[dst])\n"
+        "add %[src], t3, %[src]\n"
+        "add %[dst], t3, %[dst]\n"
         "sub t0, t0, t1\n"
         "bnez t0, 1b\n"
 
@@ -333,7 +337,7 @@ int main(void) {
     };
 
     // list of buffer sizes for memory copy throughput benchmark
-    size_t memCopySizes[] = {1024, 4096, 16384, 32768, 49152, 65536}; //, (3ull << 15), (1ull << 17), (1ull << 20), (1ull << 24), (1ull << 27)};
+    size_t memCopySizes[] = {128, 256, 512, 1024, 4096, 16384, 32768, 49152, 65536, (3ull << 15), (1ull << 17), (1ull << 20), (1ull << 24), (1ull << 27)};
 
 #ifndef VERBOSE
     // condensed display

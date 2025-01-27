@@ -18,8 +18,8 @@ VLEN?=128
 # path to proxy-kernel (pk)
 PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk64 
 
-BUILD_ARCH=rv64gcv_zbb
-SIM_ARCH=rv64gcv_zbb
+BUILD_ARCH=rv64gcv_zbb_zba
+SIM_ARCH=rv64gcv_zbb_zba
 
 # SIMULATOR
 # Available options in the Docker (uncomment one)
