@@ -203,21 +203,49 @@ void my_data_gen(uint64_t res[]) {
     res[1] = 2;
 }
 
-void my_memcpy(void* dst, void* src, size_t nBytes) {
+#define MEMCPY_LMUL 8
+#define MEMCPY_SRC_ALIGN_MASK 127
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
 
+void my_memcpy(void* dst, void* src, size_t nBytes) {
     __asm volatile (
         "mv t0, %[nBytes]\n" // avl
+        // prolog to align the source address
+        "li t2, " STR(MEMCPY_SRC_ALIGN_MASK) "\n"
+        "and t1, %[src], t2\n" // source address modulo
+        "minu t1, t0, t1\n"    // making sure we do not load more than AVL bytes in the prolog
+        // the next vsetvli ensure we load the minimum of AVL and address alignment bytes
+        "vsetvli t1, t1, e8, m" STR(MEMCPY_LMUL) ", ta, ma\n" 
+        "vle8.v v8, (%[src])\n"
+        "vse8.v v8, (%[dst])\n"
+        "add %[src], %[src], t1\n"
+        "add %[dst], %[dst], t1\n"
+        "sub t0, t0, t1\n"
+
+        // computing AVL % VLMAX remainder to align loop on VLMAX (and save vsetvli inside the loop)
+        "and t2, t0, t2\n"     
+        "sub t0, t0, t2\n"     // subtracting AVL remainder from AVL to get VLMAX remaining bytes to load
+
+        // hoisting vsetvli outside the loop
+        "vsetvli t1, t0, e8, m" STR(MEMCPY_LMUL) ", ta, ma\n"
+
+        // main copy loop
         "1:\n"
-        "vsetvli t1, t0, e8, m1, ta, ma\n"
         "vle8.v v8, (%[src])\n"
         "vse8.v v8, (%[dst])\n"
         "add %[src], %[src], t1\n"
         "add %[dst], %[dst], t1\n"
         "sub t0, t0, t1\n"
         "bnez t0, 1b\n"
+
+        // epilog (any bytes remaining in AVL which was not a multiple of VLMAX)
+        "vsetvli t1, t2, e8, m" STR(MEMCPY_LMUL) ", ta, ma\n" 
+        "vle8.v v8, (%[src])\n"
+        "vse8.v v8, (%[dst])\n"
         : [src]"+r"(src), [dst]"+r"(dst)
         : [nBytes]"r"(nBytes)
-        : "t0"
+        : "t0", "t1", "t2"
     );
 }
 
@@ -358,7 +386,7 @@ int main(void) {
             printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
-            printf("%s, %d, %d, %.3f, %.2f, %d\n", 
+            printf("%s, %zu, %lu, %.3f, %.2f, %d\n", 
                    benchmarks[benchId].label, n, bench_result.perf_count,
                    (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
                    bench_result.errors);
@@ -417,7 +445,7 @@ int main(void) {
             printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
-            printf("%s, %d, %d, %.3f, %.2f, %d\n", 
+            printf("%s, %zu, %lu, %.3f, %.2f, %d\n", 
                    data_benchmarks[benchId].label, n, bench_result.perf_count,
                    (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
                    bench_result.errors);
@@ -450,9 +478,11 @@ int main(void) {
             src = swap;
         }
         long stop = read_perf_counter();
+        // checking buffer consistency after copies
+        assert(memcmp(src, dst, localSize) == 0);
         double delta = (stop - start) / (double) nRuns;
 
-        printf("memcpy %lld %.3f %.3f\n", localSize, delta, localSize / delta);
+        printf("memcpy %zu %.3f %.3f\n", localSize, delta, localSize / delta);
 
     }
 
