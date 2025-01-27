@@ -18,8 +18,8 @@ VLEN?=128
 # path to proxy-kernel (pk)
 PK_PATH=/opt/riscv/riscv64-unknown-elf/bin/pk64 
 
-BUILD_ARCH=rv64gcv
-SIM_ARCH=rv64gcv
+BUILD_ARCH=rv64gcv_zbb
+SIM_ARCH=rv64gcv_zbb
 
 # SIMULATOR
 # Available options in the Docker (uncomment one)
@@ -33,7 +33,7 @@ BUILD_DIR ?= $(PWD)/build/
 
 $(BUILD_DIR)/ubench: microbenchmarks.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=rv64gcv $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=$(BUILD_ARCH) $^ -lm -o $@
 	$(OBJDUMP) -d $@ > $(BUILD_DIR)/ubench.dump
 
 
