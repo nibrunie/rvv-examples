@@ -75,7 +75,13 @@ ubench_result_t bench_lat_##op(size_t n) { \
 
 /** Build a latency benchmark for a 2-operand instruction
  *
- * Latency is measure by building a chain of dependent instructions
+ * Latency is measured by building a chain of dependent instructions.
+ * The instructions is called 7 times in the loop body on t0 and t1.
+ * The dependency chain is built on a RaW on t1.
+ * Between each call, t1 is reset to its original value (stored in t2).
+ * The reset is performed by first zero-ing out t1 and then copying back t2 into it.
+ * The zero-ing out (through copy and xor) and the copy (through an add) are done in such
+ * a way as to limit the possibilities for the uarch to eliminate them away.
  */
 #define BENCH_LAT_2OP_INSN(op) \
 ubench_result_t bench_lat_##op(size_t n) { \
@@ -88,24 +94,38 @@ ubench_result_t bench_lat_##op(size_t n) { \
     "1:\n" \
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
@@ -124,12 +144,26 @@ ubench_result_t bench_lat_##op(size_t n) { \
         "li t1, 0xcafebebe1337beef\n" \
         "li t2, 0xbeefcafebebe1337\n" \
     "1:\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
