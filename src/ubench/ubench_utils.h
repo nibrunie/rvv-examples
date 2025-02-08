@@ -21,8 +21,13 @@ typedef ubench_result_t (bench_func_t)(size_t);
 /** function type for micro-benchmarks with customizable input data */
 typedef ubench_result_t (bench_data_func_t)(size_t, uint64_t []);
 
+typedef struct {
+    uint64_t v[2];
+    char* label;
+} generated_data_t;
+
 /** function type for customizable data generator */
-typedef void (data_gen_t)(uint64_t[]);
+typedef generated_data_t (data_gen_t)(int);
 
 /** Descriptor structure for basic micro-benchmark */
 typedef struct {
@@ -36,6 +41,7 @@ typedef struct {
     bench_data_func_t* bench;
     data_gen_t* data_gen;
     ubench_result_t result;
+    int index;
     char label[256];
 } ubench_data_t;
 
@@ -233,7 +239,7 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 #define BENCH_THROUGHPUT_2OP_FPS_INSN(op) BENCH_THROUGHPUT_2OP_FP_INSN(op, s, 0xffffffff3fcdbeefull, 0xffffffff4abdcafeull)
 
 #define BENCH_THROUGHPUT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
-ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, uint64_t v1) { \
+ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 13; \
     long start = read_perf_counter(); \
     asm volatile( \
@@ -256,7 +262,7 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : [v0]"r"(v0), [v1]"r"(v1) \
+    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "fa0", "fa1", "fa2", "fa3", "fa4", \
       "fa5", "fa6", "fa7", \
       "ft0", "ft1", "ft2", "ft3", "ft4", \
@@ -290,26 +296,25 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t
     }; \
 }\
 ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
-    return bench_throughput_##op##_##fmt_suffix##_values(n, init_ft0, init_ft1); \
+    uint64_t v[2] = {init_ft0, init_ft1}; \
+    return bench_throughput_##op##_##fmt_suffix##_values(n, v); \
 } \
 
 /** Build a latency benchmark for a 2-operand floating-point instruction
  *
  * Latency is measured by building a chain of dependent instructions
  */
-#define BENCH_LAT_2OP_FPD_INSN(op) BENCH_LAT_2OP_FP_INSN(op, d, "0x3fcdbeef3fcdbeef", "0x4abdcafe4abdcafe")
-#define BENCH_LAT_2OP_FPS_INSN(op) BENCH_LAT_2OP_FP_INSN(op, s, "0xffffffff3fcdbeef", "0xffffffff4abdcafe")
+#define BENCH_LAT_2OP_FPD_INSN(op) BENCH_LAT_2OP_FP_INSN(op, d, 0x3fcdbeef3fcdbeefull, 0x4abdcafe4abdcafeull)
+#define BENCH_LAT_2OP_FPS_INSN(op) BENCH_LAT_2OP_FP_INSN(op, s, 0xffffffff3fcdbeefull, 0xffffffff4abdcafeull)
 
 #define BENCH_LAT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
-ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
+ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, uint64_t v1) { \
     size_t cnt = n / 16; \
     long start = read_perf_counter(); \
     asm volatile( \
-        "li t0, " init_ft0 "\n" \
-        "li t2, " init_ft1 "\n" \
-        "fmv." #fmt_suffix ".x ft0, t0\n" \
-        "fmv." #fmt_suffix ".x ft1, t2\n" \
-        "fmv." #fmt_suffix ".x ft2, t2\n" \
+        "fmv." #fmt_suffix ".x ft0, %[v0]\n" \
+        "fmv." #fmt_suffix ".x ft1, %[v1]\n" \
+        "fmv." #fmt_suffix ".x ft2, %[v1]\n" \
     "1:\n" \
         #op "." #fmt_suffix " ft1, ft1, ft0\n" \
         #op "." #fmt_suffix " ft1, ft1, ft0\n" \
@@ -330,7 +335,7 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : \
+    : [v0]"r"(v0), [v1]"r"(v1) \
     : "ft0", "ft1", "ft2"\
     ); \
     long stop = read_perf_counter(); \
@@ -357,6 +362,9 @@ ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
         .elt_per_op = 1, \
         .errors = 0 \
     }; \
+} \
+ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
+    return bench_lat_##op##_##fmt_suffix##_values(n, init_ft0, init_ft1); \
 }
 
 

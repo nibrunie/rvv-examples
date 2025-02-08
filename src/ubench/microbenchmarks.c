@@ -197,10 +197,45 @@ BENCH_2OP_VV_VEC_INSN(vfadd)
 BENCH_2OP_VV_VEC_INSN(vfmul)
 BENCH_2OP_VV_VEC_INSN(vfdiv)
 
-/** generic data generator */
-void my_data_gen(uint64_t res[]) {
-    res[0] = 1;
-    res[1] = 2;
+
+generated_data_t data_2op_int[] = {
+    {.v={1, 1}, .label="data (small, small) [identical]"},
+    {.v={0xdaadbeef, 0xdaadbeef}, .label="data (medium, medium) [identical]"},
+    {.v={0xdaadbeef1337cafe, 3}, .label="data (large, small)"},
+    {.v={0xaadbeef1337cafe, 3}, .label="data (15 hex digits, small)"},
+    {.v={0xadbeef1337cafe, 3}, .label="data (14 hex digits, small)"},
+    {.v={0xdbeef1337cafe, 3}, .label="data (13 hex digits, small)"},
+    {.v={0xbeef1337cafe, 3}, .label="data (12 hex digits, small)"},
+    {.v={0xeef1337cafe, 3}, .label="data (11 hex digits, small)"},
+    {.v={0xef1337cafe, 3}, .label="data (10 hex digits, small)"},
+    {.v={0xf1337cafe, 3}, .label="data (9 hex digits, small)"},
+    {.v={0x1337cafe, 3}, .label="data (8 hex digits, small)"},
+    {.v={0x337cafe, 3}, .label="data (7 hex digits, small)"},
+    {.v={0x37cafe, 3}, .label="data (6 hex digits, small)"},
+    {.v={0x7cafe, 3}, .label="data (5 hex digits, small)"},
+    {.v={0xcafe, 3}, .label="data (4 hex digits, small)"},
+    {.v={0xafe, 3}, .label="data (3 hex digits, small)"},
+    {.v={0xfe, 3}, .label="data (2 hex digits, small)"},
+    {.v={0xe, 3}, .label="data (1 hex digits, small)"},
+    {.v={3, 0xdaadbeef1337cafe}, .label="data (small, large)"},
+};
+
+generated_data_t data_2op_fp[] = {
+    {.v={0x3ff0000000000000ull, 0x3ff0000000000000ull}, .label="data fp64 (1.0, 1.0) [identical]"},
+    {.v={0x3ffcafebebebeef7ull, 0x3ffbebebeef13371ull}, .label="data fp64 (~1.0, ~1.0) [different]"},
+    {.v={0x3ffcafebebebeef7ull, 0x0000000000000000ull}, .label="data fp64 (~1.0, +0) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x8000000000000000ull}, .label="data fp64 (~1.0, -0) []"},
+    {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0, NaN) []"},
+};
+
+/** generic data generator for integer 2-operand instruction */
+generated_data_t data_gen_2op_int(int index) {
+    return data_2op_int[index % (sizeof(data_2op_int) / sizeof(generated_data_t))];
+}
+
+/** generic data generator for floating-point 2-operand instruction */
+generated_data_t data_gen_2op_fp(int index) {
+    return data_2op_fp[index % (sizeof(data_2op_fp) / sizeof(generated_data_t))];
 }
 
 #ifndef MEMCPY_LMUL
@@ -401,7 +436,15 @@ int main(void) {
 
     // data dependent benchmarking
     ubench_data_t data_benchmarks[] = {
-        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=my_data_gen, .label="data division benchmark"},
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #0", .index=0 },
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #1", .index=1 },
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #2", .index=2 },
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #2", .index=3 },
+
+        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=0 },
+        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=1 },
+        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=2 },
+        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=3 },
     };
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
@@ -419,16 +462,18 @@ int main(void) {
             data_benchmarks[benchId].result.perf_count = 0;
         }
 
-        for (int j = 0; j < NUM_TESTS; ++j) {
-            for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
+        // iterate over the various listed benchmarks
+        for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
+        {
+            // iterate over the number of tests
+            for (int j = 0; j < NUM_TESTS; ++j)
             {
 #               ifdef VERY_VERBOSE
                 printf("running method: %s\n", benchmarks[benchId].label);
 #               endif // VERY_VERBOSE
 
-                uint64_t data[2] = {0};
-                data_benchmarks[benchId].data_gen(data);
-                ubench_result_t local_result = data_benchmarks[benchId].bench(n, data);
+                generated_data_t bench_data = data_benchmarks[benchId].data_gen(data_benchmarks[benchId].index);
+                ubench_result_t local_result = data_benchmarks[benchId].bench(n, bench_data.v);
                 data_benchmarks[benchId].result = accumulate_ubench_result(data_benchmarks[benchId].result, local_result);
             }
         }
@@ -439,19 +484,14 @@ int main(void) {
             bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
 
 
+            generated_data_t bench_data = data_benchmarks[benchId].data_gen(data_benchmarks[benchId].index);
 #           ifdef VERBOSE 
-            printf("--------------------------------------------------------------------------------\n");
-            printf("%s used %d " PERF_METRIC "(s) to evaluate multiplication on a degree %d polynomial.\n",
-                data_benchmarks[benchId].label, bench_result.perf_count, n);
-            printf("  " PERF_METRIC " per run:        %d\n", bench_result.perf_count);
-            printf("  " PERF_METRIC " per element:    %.3f\n", (double) bench_result.perf_count / (n * bench_result.elt_per_op));
-            printf("  element(s) per " PERF_METRIC ": %.2e\n", (double) (n * bench_result.elt_per_op) / bench_result.perf_count);
-            printf("  error(s):  %d\n", bench_result.errors);
 #           else
             // condensed display
-            printf("%s, %zu, %lu, %.3f, %.2f, %d\n", 
-                   data_benchmarks[benchId].label, n, bench_result.perf_count,
-                   (double) bench_result.perf_count / (n * bench_result.elt_per_op), (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
+            printf("%s %s, %zu, %lu, %.3f, %.2f, %d\n", 
+                   data_benchmarks[benchId].label, bench_data.label, n, bench_result.perf_count,
+                   (double) bench_result.perf_count / (n * bench_result.elt_per_op),
+                   (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
                    bench_result.errors);
 #           endif
         }
