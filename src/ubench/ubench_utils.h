@@ -26,8 +26,12 @@ typedef struct {
     char* label;
 } generated_data_t;
 
-/** function type for customizable data generator */
-typedef generated_data_t (data_gen_t)(int);
+/** function type for customizable data generator
+ * The first argument is a pointer to an int that should be set to 1 if the index is invalid
+ * The second argument is the index of the data to generate
+ * The generator return a structure describing the input data (both values and a label)
+*/
+typedef generated_data_t (data_gen_t)(int*, int);
 
 /** Descriptor structure for basic micro-benchmark */
 typedef struct {

@@ -198,6 +198,7 @@ BENCH_2OP_VV_VEC_INSN(vfmul)
 BENCH_2OP_VV_VEC_INSN(vfdiv)
 
 
+/** input dataset for 2-operand integer instructions (up to 64-bit) */
 generated_data_t data_2op_int[] = {
     {.v={1, 1}, .label="data (small, small) [identical]"},
     {.v={0xdaadbeef, 0xdaadbeef}, .label="data (medium, medium) [identical]"},
@@ -220,7 +221,8 @@ generated_data_t data_2op_int[] = {
     {.v={3, 0xdaadbeef1337cafe}, .label="data (small, large)"},
 };
 
-generated_data_t data_2op_fp[] = {
+/** input dataset for 2-operand floating-point instruction (double precision) */
+generated_data_t data_2op_fp64[] = {
     {.v={0x3ff0000000000000ull, 0x3ff0000000000000ull}, .label="data fp64 (1.0, 1.0) [identical]"},
     {.v={0x3ffcafebebebeef7ull, 0x3ffbebebeef13371ull}, .label="data fp64 (~1.0, ~1.0) [different]"},
     {.v={0x3ffcafebebebeef7ull, 0x0000000000000000ull}, .label="data fp64 (~1.0, +0) []"},
@@ -228,14 +230,45 @@ generated_data_t data_2op_fp[] = {
     {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0, NaN) []"},
 };
 
-/** generic data generator for integer 2-operand instruction */
-generated_data_t data_gen_2op_int(int index) {
-    return data_2op_int[index % (sizeof(data_2op_int) / sizeof(generated_data_t))];
+/** input dataset for 2-operand floating-point instruction (sginle precision) */
+generated_data_t data_2op_fp32[] = {
+    {.v={0xffffffff3ff00000ull, 0xffffffff3ff00000ull}, .label="data fp32 (1.0, 1.0) [identical]"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff3ffbebebull}, .label="data fp32 (~1.0, ~1.0) [different]"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff00000000ull}, .label="data fp32 (~1.0, +0) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff80000000ull}, .label="data fp32 (~1.0, -0) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffffffffffffull}, .label="data fp32 (~1.0, NaN) []"},
+};
+
+/** generic data generator for integer 2-operand instruction
+ *
+ *  @param invalid[inout] point to a flag set to a non-zero value if index is invalid
+ *  @param index[in] index of the generated data to return
+ *  @return the generated data
+*/
+generated_data_t data_gen_2op_int(int* invalid, int index) {
+    *invalid = index >= (sizeof(data_2op_int) / sizeof(generated_data_t));
+    if (!(*invalid)) {
+        return data_2op_int[index];
+    }
+    return data_2op_int[0];
 }
 
-/** generic data generator for floating-point 2-operand instruction */
-generated_data_t data_gen_2op_fp(int index) {
-    return data_2op_fp[index % (sizeof(data_2op_fp) / sizeof(generated_data_t))];
+/** generic data generator for floating-point 2-operand instruction (double precision) */
+generated_data_t data_gen_2op_fp64(int* invalid, int index) {
+    *invalid = index >= (sizeof(data_2op_fp64) / sizeof(generated_data_t));
+    if (!(*invalid)) {
+        return data_2op_fp64[index];
+    }
+    return data_2op_fp64[0];
+}
+
+/** generic data generator for floating-point 2-operand instruction (single precision) */
+generated_data_t data_gen_2op_fp32(int* invalid, int index) {
+    *invalid = index >= (sizeof(data_2op_fp32) / sizeof(generated_data_t));
+    if (!(*invalid)) {
+        return data_2op_fp32[index];
+    }
+    return data_2op_fp32[0];
 }
 
 #ifndef MEMCPY_LMUL
@@ -436,15 +469,13 @@ int main(void) {
 
     // data dependent benchmarking
     ubench_data_t data_benchmarks[] = {
-        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #0", .index=0 },
-        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #1", .index=1 },
-        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #2", .index=2 },
-        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark #2", .index=3 },
+        (ubench_data_t){.bench = bench_throughput_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark", .index=0 },
 
-        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=0 },
-        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=1 },
-        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=2 },
-        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp, .label="data fdiv benchmark #0", .index=3 },
+        (ubench_data_t){.bench = bench_throughput_rem_values, .data_gen=data_gen_2op_int, .label="data rem benchmark", .index=0 },
+
+        (ubench_data_t){.bench = bench_throughput_fdiv_d_values, .data_gen=data_gen_2op_fp64, .label="data fdiv benchmark", .index=0 },
+
+        (ubench_data_t){.bench = bench_throughput_fdiv_s_values, .data_gen=data_gen_2op_fp32, .label="data fdiv benchmark", .index=0 },
     };
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
@@ -465,35 +496,40 @@ int main(void) {
         // iterate over the various listed benchmarks
         for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
         {
-            // iterate over the number of tests
-            for (int j = 0; j < NUM_TESTS; ++j)
-            {
-#               ifdef VERY_VERBOSE
-                printf("running method: %s\n", benchmarks[benchId].label);
-#               endif // VERY_VERBOSE
 
-                generated_data_t bench_data = data_benchmarks[benchId].data_gen(data_benchmarks[benchId].index);
-                ubench_result_t local_result = data_benchmarks[benchId].bench(n, bench_data.v);
-                data_benchmarks[benchId].result = accumulate_ubench_result(data_benchmarks[benchId].result, local_result);
+            for (unsigned index = 0; ; index++) {
+                int invalid = 0;
+                generated_data_t bench_data = data_benchmarks[benchId].data_gen(&invalid, index);
+                if (invalid) break;
+
+                // benchmark result init
+                ubench_result_t bench_result = {.errors = 0, .perf_count = 0};
+
+                // iterate over the number of tests
+                for (int j = 0; j < NUM_TESTS; ++j)
+                {
+    #               ifdef VERY_VERBOSE
+                    printf("running method: %s\n", benchmarks[benchId].label);
+    #               endif // VERY_VERBOSE
+
+                    ubench_result_t local_result = data_benchmarks[benchId].bench(n, bench_data.v);
+                    bench_result = accumulate_ubench_result(bench_result, local_result);
+                }
+                // display results
+                bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
+
+
+    #           ifdef VERBOSE 
+    #           else
+                // condensed display
+                printf("%s #%d %s, %zu, %lu, %.3f, %.2f, %d\n", 
+                    data_benchmarks[benchId].label, index, bench_data.label, n, bench_result.perf_count,
+                    (double) bench_result.perf_count / (n * bench_result.elt_per_op),
+                    (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
+                    bench_result.errors);
+    #           endif
+
             }
-        }
-        // display results
-        for (unsigned benchId=0; benchId < sizeof(data_benchmarks) / sizeof(ubench_data_t); benchId++)
-        {
-            ubench_result_t bench_result = data_benchmarks[benchId].result;
-            bench_result.perf_count = bench_result.perf_count / NUM_TESTS;
-
-
-            generated_data_t bench_data = data_benchmarks[benchId].data_gen(data_benchmarks[benchId].index);
-#           ifdef VERBOSE 
-#           else
-            // condensed display
-            printf("%s %s, %zu, %lu, %.3f, %.2f, %d\n", 
-                   data_benchmarks[benchId].label, bench_data.label, n, bench_result.perf_count,
-                   (double) bench_result.perf_count / (n * bench_result.elt_per_op),
-                   (double) (n * bench_result.elt_per_op) / bench_result.perf_count,
-                   bench_result.errors);
-#           endif
         }
     }
 
