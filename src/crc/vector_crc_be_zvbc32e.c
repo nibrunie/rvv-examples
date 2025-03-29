@@ -61,7 +61,6 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
    // hoisting setting vl (assuming it won't change in loop)
    size_t vl = __riscv_vsetvl_e32m1(-1);
 
-#if 1
   asm volatile (
     "mv a2, %[bound]\n"
     "bgeu	%[p], a2, 2f\n" // skipping inner loop if length is not large enough
@@ -86,34 +85,6 @@ uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t
   );
   len = 16; // remainder after end of loop (FIXME: assume original len was a multiple of 16)
 
-#else
-  for (; avl >= 2*vl; avl -= vl, p += 4 * vl, len -= 4*vl) {
-      // printf("loop avl=%lu.\n", avl);
-      // compute loop body vector length from application vector length avl
-      assert(vl == 4);
-      vuint32m1_t inputData = __riscv_vle32_v_u32m1((uint32_t*) p, vl);
-      // byte swapping the data to align their endianess with the CRC accumulator
-      inputData = __riscv_vrev8_v_u32m1(inputData, vl);
-      inputData = __riscv_vxor_vv_u32m1_tu(inputData, inputData, crcAcc, 2); // vl=2 since we only want to XOR the 64-bit crcAcc 
-
-      // Actual multiplication
-      vuint32m1_t multResLo; // = __riscv_vclmul_vv_u32m1(inputData, extRedCstVector, vl);
-      vuint32m1_t multResHi; // = __riscv_vclmulh_vv_u32m1(inputData, extRedCstVector, vl);
-      asm volatile (
-        "vsetivli x0, 4, e32, m1, tu, mu\n"
-        "vclmul.vv v20, %[inputData], %[redConstantVector]\n"
-        "vclmulh.vv %[multResultHi], %[inputData], %[redConstantVector]\n"
-        "vmv.v.v %[multResultLo], v20\n"
-         : [multResultLo]"=vr"(multResLo), [multResultHi]"=vr"(multResHi) 
-         : [inputData]"vr"(inputData), [redConstantVector]"vr"(redConstantVector)
-         : "v20");
-      // asm volatile ("vclmulh.vv %0, %1, %2" : "=vr"(multResHi) : "vr"(inputData), "vr"(redConstantVector));
-
-      crcAccLo = __riscv_vredxor_vs_u32m1_u32m1_tu(crcAccLo, multResLo, zeroVecU32M1, vl);
-      crcAccHi = __riscv_vredxor_vs_u32m1_u32m1_tu(crcAccHi, multResHi, zeroVecU32M1, vl);
-      crcAcc = __riscv_vslideup_vx_u32m1(crcAccHi, crcAccLo, 1, 2);
-  }
-#endif
   // to finalize the CRC, we must:
   // 1. store the 64-bit of the folded value in memory and call the baseline scalar CRC on it
   // 2. finalize the CRC on the unprocessed bytes from p (should be 128-bit left)
