@@ -535,6 +535,29 @@ run_test_zvb(const struct aes_gcm_test* test, int keylen)
 // Zvkg Implementation
 //
 
+
+static uint128
+vghsh_zvkgs(
+    uint128 Y,
+    const uint128 X,
+    const uint128 H
+)
+{
+    uint128 res = Y;  // Start with Y
+    __asm__ volatile (
+        "vsetivli zero, 4, e32, m4, ta, ma\n" // Set vector length to 4 for 128b block
+        "vle32.v v4, (%[res])\n"        // Load Y into v4 (vghsh will use this as Y)
+        "vle32.v v8, (%[X])\n"         // Load X into v8
+        "vle32.v v12, (%[H])\n"         // Load H into v12
+        "vghsh.vs v4, v8, v12\n"  // Perform GHASH on Y, X, and H
+        "vse32.v v4, (%[res])\n"        // Store the result back to res
+        :
+        : [res] "r" (&res), [X] "r" (&X), [H] "r" (&H) // Input operands: X and H
+        : "v4", "v8", "v12", "memory" // Clobbered registers
+    );
+    return res;
+}
+
 // Returns (Y ^ X) o H
 //
 // Taking the arguments by value and returning a new value
@@ -545,7 +568,12 @@ run_test_zvb(const struct aes_gcm_test* test, int keylen)
 static uint128
 vghsh(uint128 Y, uint128 X, uint128 H) {
     uint128 res = Y;
-    zvkg_vghsh(&res, &X, &H);
+    // zvkg_vghsh(&res, &X, &H);
+    vghsh_zvkgs(
+        res,   // Y
+        X,     // X
+        H      // H
+    );
     return res;
 }
 
