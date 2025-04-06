@@ -38,13 +38,13 @@ int32_t golden_min(int32_t* vec, size_t len) {
  * @param len number of elements in the input vector
  * @return minimum of the vector element(s)
  */
-int32_t rvv_min(int32_t* vec, size_t len) {
+__attribute__((noinline)) int32_t rvv_min(int32_t* vec, size_t len) {
     int32_t min = INT32_MAX;
     asm __volatile__ (
-        "vsetivli x0, 1, e32, m1\n"     // set vector length, before initializing the scalar value
+        "vsetivli x0, 1, e32, m1, ta, ma \n"     // set vector length, before initializing the scalar value
         "vmv.v.x v16, %[min]\n"         // initializing the minimum value in v8 (vector register)
     "rvv_min_loop:\n"                              // label for the loop
-        "vsetvli a4, %[avl], e32, m8\n" // set vector length
+        "vsetvli a4, %[avl], e32, m8, ta, ma\n" // set vector length
         "vle32.v v8, (%[vec])\n"        // load vector from memory
         "vredmin.vs v16, v8, v16\n"     // compute the minimum in the vector
         "sub %[avl], %[avl], a4\n"      // decrement the remaining length
@@ -62,17 +62,17 @@ int32_t rvv_min(int32_t* vec, size_t len) {
 int32_t rvv_min_2_steps(int32_t* vec, size_t len) {
     int32_t min = INT32_MAX;
     asm __volatile__ (
-        "vsetvli a4,x0, e32, m8\n"    // set vector length, before initializing the scalar value
+        "vsetvli a4,x0, e32, m8, ta, ma\n"    // set vector length, before initializing the scalar value
         "vmv.v.x v16, %[min]\n"         // initializing the minimum value in v8 (vector register)
     "1:\n"                   // label for the loop
-        "vsetvli a4, %[avl], e32, m8\n" // set vector length
+        "vsetvli a4, %[avl], e32, m8, ta, ma\n" // set vector length
         "vle32.v v8, (%[vec])\n"        // load vector from memory
         "vmin.vv v16, v8, v16\n"        // compute the minimum in the vector
         "sub %[avl], %[avl], a4\n"      // decrement the remaining length
         "sh2add %[vec], a4, %[vec]\n"   // move the vector pointer forward by the number of processed elements
         "bnez %[avl], 1b\n"   // if there are more elements to process, loop back
 
-        "vsetvli a4, x0, e32, m8\n"    // set vector length, before initializing the scalar value
+        "vsetvli a4, x0, e32, m8, ta, ma\n"    // set vector length, before initializing the scalar value
         "vredmin.vs v16, v16, v16\n"    // this is a second step to ensure the final reduction in case of multiple vector registers
         "vmv.x.s %[min], v16\n"         // move the final minimum value from vector register to scalar
         : [avl]"+r"(len), [min]"+r"(min), [vec]"+r"(vec)                 // output operand (min)
@@ -98,13 +98,13 @@ float vector_dot_product(float* lhs, float* rhs, size_t len) {
  * @param len length of the vectors
  * @return the dot product of the two vectors
  */
-float rvv_dot_product(float* lhs, float* rhs, size_t len) {
+__attribute__((noinline)) float rvv_dot_product(float* lhs, float* rhs, size_t len) {
     float res = 0.f;
     asm __volatile__ (
-        "vsetivli x0, 1, e32, m1\n"     // set vector length, before initializing the scalar value
+        "vsetivli x0, 1, e32, m1, ta, ma\n"     // set vector length, before initializing the scalar value
         "vfmv.v.f v24, %[res]\n"         // initializing the temporary accumulator in v24[0] to zero
     "rvv_dot_product_loop:\n"                              // label for the loop
-        "vsetvli a4, %[avl], e32, m8\n" // set vector length
+        "vsetvli a4, %[avl], e32, m8, ta, ma\n" // set vector length
         "vle32.v v8, (%[lhs])\n"        // load left hand side vector from memory
         "vle32.v v16, (%[rhs])\n"        // load right hand side vector from memory
         "vfmul.vv v8, v8, v16\n"         // multiply the two vectors element-wise
@@ -129,13 +129,13 @@ float rvv_dot_product(float* lhs, float* rhs, size_t len) {
  * @param len length of the vectors
  * @return the dot product of the two vectors
  */
-float rvv_dot_product_u(float* lhs, float* rhs, size_t len) {
+__attribute__((noinline)) float rvv_dot_product_u(float* lhs, float* rhs, size_t len) {
     float res = 0.f;
     asm __volatile__ (
-        "vsetivli x0, 1, e32, m1\n"     // set vector length, before initializing the scalar value
+        "vsetivli x0, 1, e32, m1, ta, ma\n"     // set vector length, before initializing the scalar value
         "vfmv.v.f v24, %[res]\n"         // initializing the temporary accumulator in v24[0] to zero
     "rvv_dot_product_u_loop:\n"                              // label for the loop
-        "vsetvli a4, %[avl], e32, m8\n" // set vector length
+        "vsetvli a4, %[avl], e32, m8, ta, ma\n" // set vector length
         "vle32.v v8, (%[lhs])\n"        // load left hand side vector from memory
         "vle32.v v16, (%[rhs])\n"        // load right hand side vector from memory
         "vfmul.vv v8, v8, v16\n"         // multiply the two vectors element-wise
@@ -159,10 +159,10 @@ float rvv_dot_product_u(float* lhs, float* rhs, size_t len) {
  * @param len length of the vectors
  * @return the dot product of the two vectors
  */
-float rvv_dot_product_2_steps(float* lhs, float* rhs, size_t len) {
+__attribute__((noinline)) float rvv_dot_product_2_steps(float* lhs, float* rhs, size_t len) {
     float res = 0.f;
     asm __volatile__ (
-        "vsetvli a4, x0, e32, m8\n" // set vector length
+        "vsetvli a4, x0, e32, m8, ta, ma\n" // set vector length
         "vfmv.v.f v24, %[res]\n"    // initializing the temporary accumulators in v24 to zeros
         "vmv.v.i v24, 0\n"
     "rvv_dot_product_2_steps_loop:\n"                   // label for the loop
@@ -175,7 +175,7 @@ float rvv_dot_product_2_steps(float* lhs, float* rhs, size_t len) {
         "sh2add %[rhs], a4, %[rhs]\n"                   // move the vector pointer forward by the number of processed elements
         "bnez %[avl], rvv_dot_product_2_steps_loop\n"   // if there are more elements to process, loop back
 
-        "vsetvli a4, x0, e32, m8\n" // set vector length
+        "vsetvli a4, x0, e32, m8, ta, ma\n" // set vector length
         "vmv.v.i v16, 0\n" // initialize v16 to zero for the final reduction step
         "vfredusum.vs v16, v24, v16\n"   // this is a second step to ensure the final reduction in case of multiple vector registers
         "vfmv.f.s %[res], v16\n"         // move the final minimum value from vector register to scalar
