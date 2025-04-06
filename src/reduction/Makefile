@@ -9,7 +9,7 @@ SPIKE ?= spike
 
 
 bench_reduction: reduction_bench.c
-	riscv64-unknown-elf-gcc -O2 -save-temps -DCRC_BE_BITS=$(CRC_BE_BITS) -I../utils -march=rv64gcv_zba $^ -o $@ $(CFLAGS)
+	riscv64-unknown-elf-gcc -O2 -I../utils -march=rv64gcv_zba $^ -o $@ $(CFLAGS)
 
 clean:
 	rm *.o build/*.o bench_reduction

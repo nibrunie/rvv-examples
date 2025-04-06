@@ -2,7 +2,7 @@
 
 https://github.com/nibrunie/rvv-examples/tree/master/src/reduction
 
-This repository contains a few toy examples of vector workload using reduction operations.
+This repository contains a few toy examples of vector workloads using reduction operations.
 
 Those examples are described in a blog post on https://fprox.substack.com.
 
@@ -10,8 +10,8 @@ Those examples are described in a blog post on https://fprox.substack.com.
 
 ## Building the image
 
-The examples in this directory require an experimental RISC-V.
-This toolchain can be build inside a Docker container using one of the docker file
+The examples in this directory require a RISC-V toolchain.
+This toolchain can be build inside a Docker container using one of the docker files
 present in this repository: https://github.com/nibrunie/rvv-examples/tree/master/riscv-toolchain-hub.Dockerfile
 
 ```
@@ -29,7 +29,7 @@ docker run  -ti --mount type=bind,source="$(pwd)"/,target=/home/app riscv:rvv-ex
 
 # Building and executing reduction benchmarks
 
-From within the docker container previous built, you can run the reduction benchmarks easily:
+From within the docker container previously built, you can run the reduction benchmarks easily:
 
 ```
 cd src/reduction

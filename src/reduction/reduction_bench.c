@@ -13,6 +13,13 @@
 #endif 
 
 
+/** Golden reference implementation of vector reduction-based minimum
+ *  of 32-bit signed integers.
+ *
+ * @param vec input vector
+ * @param len number of elements in the input vector
+ * @return minimum of the vector element(s)
+ */
 int32_t golden_min(int32_t* vec, size_t len) {
     if (len <= 0) return -1;
     int32_t min = vec[0];
@@ -24,6 +31,13 @@ int32_t golden_min(int32_t* vec, size_t len) {
     return min;
 }
 
+/** RVV-based implementation of vector minimum
+ *  of 32-bit signed integers.
+ *
+ * @param vec input vector
+ * @param len number of elements in the input vector
+ * @return minimum of the vector element(s)
+ */
 int32_t rvv_min(int32_t* vec, size_t len) {
     int32_t min = INT32_MAX;
     asm __volatile__ (
