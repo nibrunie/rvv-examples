@@ -7,9 +7,11 @@ INCLUDE ?= "-I/opt/riscv/riscv64-unknown-elf/include/"
 
 SPIKE ?= spike
 
+MAIN_CC ?= riscv64-unknown-elf-gcc
+
 
 bench_reduction: reduction_bench.c
-	riscv64-unknown-elf-gcc -O2 -I../utils -march=rv64gcv_zba $^ -o $@ $(CFLAGS)
+	 $(MAIN_CC) -O2 -I../utils -march=rv64gcv_zba $^ -o $@ $(CFLAGS) $(EXTRA_CFLAGS)
 
 clean:
 	rm *.o build/*.o bench_reduction
