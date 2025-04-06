@@ -187,12 +187,24 @@ float rvv_dot_product_2_steps(float* lhs, float* rhs, size_t len) {
 }
 
 
+/** Integer reduction benchmark (single array interface)
+ *
+ * @param red_func the reduction function to benchmark
+ * @param golden the golden reference implementation for comparison
+ * @param label a label describing the benchmark
+ */
 typedef struct {
     int32_t (*red_func)(int32_t* vec, size_t len);
     int32_t (*golden)(int32_t* vec, size_t len);
     char* label;
 } int_reduction_bench_t;
 
+/** Floating-point reduction benchmark (2-array interface)
+ *
+ * @param red_func the reduction function to benchmark
+ * @param golden the golden reference implementation for comparison
+ * @param label a label describing the benchmark
+ */
 typedef struct {
     float (*red_func)(float* lhs, float*rhs, size_t len);
     float (*golden)(float* lhs, float* rhs, size_t len);
@@ -200,6 +212,10 @@ typedef struct {
 } float_reduction_bench_t;
 
 
+/** Integer reduction benchmark
+ *
+ * @return zero if all benchmarks passed, otherwise returns the number of failed benchmarks.
+ */
 int bench_int_reduction(void) {
     uint32_t start = 0, stop = 0;
 
@@ -246,17 +262,18 @@ int bench_int_reduction(void) {
     #       else
             printf("%8lu, %8"PRIi32", %s, %u\n", vecSize, result, benchmarks[bench_id].label, delay);
     #       endif
-
         }
-
         free(inputVec);
-
     }
 
     return error;
 }
 
 
+/** Floating-point reduction benchmark
+ *
+ * @return zero if all benchmarks passed, otherwise returns the number of failed benchmarks.
+ */
 int bench_float_reduction(void) {
     uint32_t start = 0, stop = 0;
 
@@ -312,10 +329,8 @@ int bench_float_reduction(void) {
     #       endif
 
         }
-
         free(inputVecLHS);
         free(inputVecRHS);
-
     }
 
     return error;
