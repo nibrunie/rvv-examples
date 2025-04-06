@@ -8,8 +8,8 @@
 #include "bench_utils.h"
 
 // setting a default message size (1MiB) if none is defined
-#ifndef MSG_SIZES
-# define MSG_SIZES (1024 * 1024)
+#ifndef VECTOR_SIZE
+# define VECTOR_SIZE (1024 * 1024)
 #endif 
 
 
@@ -198,7 +198,7 @@ int bench_int_reduction(void) {
         {.red_func = rvv_min_2_steps, .golden = golden_min, .label = "RVV based 2-step vector min reduction"},
     };
 
-    size_t vectorSizes[] = {16, 32, 64, 128, 512, 1024, 16384, MSG_SIZES};
+    size_t vectorSizes[] = {16, 32, 64, 128, 512, 1024, 16384, VECTOR_SIZE};
     int error = 0;
 #   ifndef VERBOSE
         printf("message_size, red_result, label, perf(" PERF_METRIC ")\n");
@@ -250,15 +250,13 @@ int bench_float_reduction(void) {
 
     float_reduction_bench_t benchmarks[] = {
         // labels should be padded to all have the same width (result display alignment)
-        //{.red_func = vector_dot_product,      .golden = vector_dot_product, .label = "generic vector dot product"},
-        // {.red_func = rvv_dot_product_2_steps, .golden = vector_dot_product, .label = "RVV-based vector dot product (parallel accumulation)"},
-        //{.red_func = rvv_dot_product,         .golden = vector_dot_product, .label = "RVV-based vector dot product (ordered vfredosum)"},
-        //{.red_func = rvv_dot_product_u,       .golden = vector_dot_product, .label = "RVV-based vector dot product (unordered vfredusum)"},
-
+        {.red_func = vector_dot_product,      .golden = vector_dot_product, .label = "generic vector dot product"},
+        {.red_func = rvv_dot_product,         .golden = vector_dot_product, .label = "RVV-based vector dot product (ordered vfredosum)"},
+        {.red_func = rvv_dot_product_u,       .golden = vector_dot_product, .label = "RVV-based vector dot product (unordered vfredusum)"},
         {.red_func = rvv_dot_product_2_steps, .golden = rvv_dot_product, .label = "RVV-based vector dot product (parallel accumulation)"},
     };
 
-    size_t vectorSizes[] = {MSG_SIZES}; // 16, 32, 64, 128, 511, 512, 513, 1024, 16384, MSG_SIZES};
+    size_t vectorSizes[] = {16, 32, 64, 128, 511, 512, 513, 1024, 16384, VECTOR_SIZE};
     int error = 0;
 #   ifndef VERBOSE
         printf("message_size, red_result, label, perf(" PERF_METRIC ")\n");
@@ -272,10 +270,11 @@ int bench_float_reduction(void) {
         assert(inputVecRHS != NULL && "Failed to allocate memory for input vector"); // ensure allocation was successful
 
         for (size_t i = 0; i < vecSize; ++i) {
-            // fill the input vectors with random floats in the range [0, 17)
-            // floats are actually converted integer so we do not get rounding errors for small enough vector sizes
-            inputVecLHS[i] = (float)(i % 17); // (float)(rand() % 17);
-            inputVecRHS[i] = (float)(i % 17);
+            // fill the input vectors with random floats in the range [0, 7)
+            // floats are actually converted integer so we do not get
+            // rounding errors for small enough vector sizes.
+            inputVecLHS[i] = (float)(i % 7);
+            inputVecRHS[i] = (float)(i % 7);
         }
 
         for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(float_reduction_bench_t); bench_id++) {
@@ -314,7 +313,7 @@ int bench_float_reduction(void) {
 int main(void) {
     int error = 0;
     
-    // error |= bench_int_reduction();
+    error |= bench_int_reduction();
 
     error |= bench_float_reduction();
 
