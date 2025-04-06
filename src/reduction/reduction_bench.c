@@ -151,17 +151,15 @@ float rvv_dot_product_2_steps(float* lhs, float* rhs, size_t len) {
         "vsetvli a4, x0, e32, m8\n" // set vector length
         "vfmv.v.f v24, %[res]\n"    // initializing the temporary accumulators in v24 to zeros
         "vmv.v.i v24, 0\n"
-    "rvv_dot_product_2_steps_loop:\n"                              // label for the loop
-        "vsetvli a4, %[avl], e32, m8, tu, mu\n" // set vector length
-        "vle32.v v8, (%[lhs])\n"        // load left hand side vector from memory
-        "vle32.v v16, (%[rhs])\n"        // load right hand side vector from memory
-        // could be (should be) fused into element-wise vfmadd
-        "vfmul.vv v8, v8, v16\n"         // multiply the two vectors element-wise
-        "vfadd.vv v24, v8, v24\n"     // accumulate the product into the temporary accumulator (v24[0])
-        "sub %[avl], %[avl], a4\n"      // decrement the remaining length
-        "sh2add %[lhs], a4, %[lhs]\n"   // move the vector pointer forward by the number of processed elements
-        "sh2add %[rhs], a4, %[rhs]\n"   // move the vector pointer forward by the number of processed elements
-        "bnez %[avl], rvv_dot_product_2_steps_loop\n"             // if there are more elements to process, loop back
+    "rvv_dot_product_2_steps_loop:\n"                   // label for the loop
+        "vsetvli a4, %[avl], e32, m8, tu, mu\n"         // set vector length
+        "vle32.v v8, (%[lhs])\n"                        // load left hand side vector from memory
+        "vle32.v v16, (%[rhs])\n"                       // load right hand side vector from memory
+        "vfmacc.vv v24, v8, v16\n"                      // multiply the two vectors element-wise
+        "sub %[avl], %[avl], a4\n"                      // decrement the remaining length
+        "sh2add %[lhs], a4, %[lhs]\n"                   // move the vector pointer forward by the number of processed elements
+        "sh2add %[rhs], a4, %[rhs]\n"                   // move the vector pointer forward by the number of processed elements
+        "bnez %[avl], rvv_dot_product_2_steps_loop\n"   // if there are more elements to process, loop back
 
         "vsetvli a4, x0, e32, m8\n" // set vector length
         "vmv.v.i v16, 0\n" // initialize v16 to zero for the final reduction step
