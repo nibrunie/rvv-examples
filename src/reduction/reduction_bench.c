@@ -37,6 +37,81 @@ int32_t golden_min(int32_t* vec, size_t len) {
     return min;
 }
 
+#define BENCH_REDUCTION_OP(op, lmul, init_value) \
+__attribute__((noinline)) int32_t reduction_insn_bench_ ## op ## _ ## lmul(int32_t* vec, size_t len) { \
+    int32_t acc = init_value; \
+    asm __volatile__ ( \
+        "vsetivli x0, 1, e32, m1, ta, ma \n" \
+        "vmv.v.x v16, %[acc]\n" \
+        "vsetvli a4, %[avl], e32, " str(lmul) ", ta, ma\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        "vmv.x.s %[acc], v16\n" \
+        : [avl]"+r"(len), [acc]"+r"(acc), [vec]"+r"(vec) \
+        : \
+        : "memory", "a4", "v8", "v16" \
+    ); \
+    return acc; \
+}
+
+BENCH_REDUCTION_OP(vredmin, m8, INT32_MAX) // Generate the reduction instruction for minimum
+BENCH_REDUCTION_OP(vredsum, m8, 0) // Generate the reduction instruction for sum (for completeness)
+BENCH_REDUCTION_OP(vfredusum, m8, 0.f)
+BENCH_REDUCTION_OP(vfredosum, m8, 0.f) // Generate the reduction instruction for ordered sum
+
+typedef struct {
+    int32_t (*red_func)(int32_t* vec, size_t len);
+    char* label;
+} synthetic_reduction_bench_t;
+
+int synthetic_bench() {
+    int vlmax = -1;
+    __asm __volatile__ (
+        "vsetvli %[vlmax], x0, e32, " str(LMUL) ", ta, ma \n" // set vector length
+        : [vlmax]"=r"(vlmax)
+        :
+        : "memory"
+    );
+
+    synthetic_reduction_bench_t benchmarks[] = {
+        // labels should be padded to all have the same width (result display alignment)
+        {.red_func = reduction_insn_bench_vredmin_m8, .label = "vredmin.vs;lmul=" str(LMUL)}, // this is the minimum reduction
+        {.red_func = reduction_insn_bench_vredsum_m8, .label = "vredsum.vs;lmul=" str(LMUL)}, // sum reduction
+        {.red_func = reduction_insn_bench_vfredusum_m8, .label = "vfredusum.vs;lmul=" str(LMUL)}, // unordered sum
+        {.red_func = reduction_insn_bench_vfredosum_m8, .label = "vfredosum.vs;lmul=" str(LMUL)}, // ordered sum
+    };
+
+#   ifndef VERBOSE
+        printf("vector_size, result, label, perf(" PERF_METRIC ")\n");
+#   endif
+
+    int32_t* inputVec = (int32_t*) malloc(vlmax * sizeof(int32_t)); // allocate space for the vector
+    uint32_t start = 0, stop = 0;
+
+    for (int vl = 0; vl <= vlmax; ++vl) {
+        for (int bench_id = 0; bench_id < sizeof(benchmarks) / sizeof(synthetic_reduction_bench_t); bench_id++) {
+            start = read_perf_counter();
+            int32_t result = benchmarks[bench_id].red_func(inputVec, vl); // call the reduction function
+            stop = read_perf_counter();
+
+            uint32_t delay = stop - start;
+            float throughput = (double) delay / vl; 
+
+            // full message
+    #       ifdef VERBOSE
+            printf("reduction(vector[%lu]) = %"PRIi32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
+                vl, result, benchmarks[bench_id].label, delay, throughput);
+    #       else
+            printf("%8lu, %8"PRIi32", %s, %u\n", vl, result, benchmarks[bench_id].label, delay);
+    #       endif
+        }
+    }
+
+    free(inputVec); // free the allocated vector
+    return 0; // return success
+
+}
+
+
 /** RVV-based implementation of vector minimum
  *  of 32-bit signed integers.
  *
@@ -349,6 +424,8 @@ int main(void) {
     error |= bench_int_reduction();
 
     error |= bench_float_reduction();
+
+    error |= synthetic_bench();
 
     return error;
 }
