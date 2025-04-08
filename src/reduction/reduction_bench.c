@@ -454,9 +454,9 @@ int bench_float_reduction(void) {
 int main(void) {
     int error = 0;
     
-    // error |= bench_int_reduction();
+    error |= bench_int_reduction();
 
-    // error |= bench_float_reduction();
+    error |= bench_float_reduction();
 
     error |= synthetic_bench();
 
