@@ -125,7 +125,7 @@ int synthetic_bench() {
             int32_t result = benchmarks[bench_id].red_func(inputVec, vl); // call the reduction function
             stop = read_perf_counter();
 
-	    // dividing by 30 because we run each instruction 30 time
+	    // dividing by 30 because we run each instruction 30 times
             float delay = (stop - start) / 30.f;
             float throughput = (double) delay / vl; 
 
