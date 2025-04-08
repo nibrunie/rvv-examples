@@ -37,13 +37,43 @@ int32_t golden_min(int32_t* vec, size_t len) {
     return min;
 }
 
-#define BENCH_REDUCTION_OP(op, lmul, init_value) \
-__attribute__((noinline)) int32_t reduction_insn_bench_ ## op ## _ ## lmul(int32_t* vec, size_t len) { \
+#define BENCH_REDUCTION_OP(op, init_value) \
+__attribute__((noinline)) int32_t reduction_insn_bench_ ## op (int32_t* vec, size_t len) { \
     int32_t acc = init_value; \
     asm __volatile__ ( \
         "vsetivli x0, 1, e32, m1, ta, ma \n" \
         "vmv.v.x v16, %[acc]\n" \
-        "vsetvli a4, %[avl], e32, " str(lmul) ", ta, ma\n" \
+        "vsetvli a4, %[avl], e32, " str(LMUL) ", tu, mu\n" \
+	"vle32.v v8, (%[vec])\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
+        str(op) ".vs v16, v8, v16\n" \
         str(op) ".vs v16, v8, v16\n" \
         "vmv.x.s %[acc], v16\n" \
         : [avl]"+r"(len), [acc]"+r"(acc), [vec]"+r"(vec) \
@@ -53,10 +83,11 @@ __attribute__((noinline)) int32_t reduction_insn_bench_ ## op ## _ ## lmul(int32
     return acc; \
 }
 
-BENCH_REDUCTION_OP(vredmin, m8, INT32_MAX) // Generate the reduction instruction for minimum
-BENCH_REDUCTION_OP(vredsum, m8, 0) // Generate the reduction instruction for sum (for completeness)
-BENCH_REDUCTION_OP(vfredusum, m8, 0.f)
-BENCH_REDUCTION_OP(vfredosum, m8, 0.f) // Generate the reduction instruction for ordered sum
+BENCH_REDUCTION_OP(vredmin, INT32_MAX) // Generate the reduction instruction for minimum
+BENCH_REDUCTION_OP(vredsum, 0) // Generate the reduction instruction for sum (for completeness)
+BENCH_REDUCTION_OP(vfredusum, 0.f)
+BENCH_REDUCTION_OP(vfredosum, 0.f) // Generate the reduction instruction for ordered sum
+				       //
 
 typedef struct {
     int32_t (*red_func)(int32_t* vec, size_t len);
@@ -74,10 +105,10 @@ int synthetic_bench() {
 
     synthetic_reduction_bench_t benchmarks[] = {
         // labels should be padded to all have the same width (result display alignment)
-        {.red_func = reduction_insn_bench_vredmin_m8, .label = "vredmin.vs;lmul=" str(LMUL)}, // this is the minimum reduction
-        {.red_func = reduction_insn_bench_vredsum_m8, .label = "vredsum.vs;lmul=" str(LMUL)}, // sum reduction
-        {.red_func = reduction_insn_bench_vfredusum_m8, .label = "vfredusum.vs;lmul=" str(LMUL)}, // unordered sum
-        {.red_func = reduction_insn_bench_vfredosum_m8, .label = "vfredosum.vs;lmul=" str(LMUL)}, // ordered sum
+        {.red_func = reduction_insn_bench_vredmin, .label = "vredmin.vs;lmul=" str(LMUL)}, // this is the minimum reduction
+        {.red_func = reduction_insn_bench_vredsum, .label = "vredsum.vs;lmul=" str(LMUL)}, // sum reduction
+        {.red_func = reduction_insn_bench_vfredusum, .label = "vfredusum.vs;lmul=" str(LMUL)}, // unordered sum
+        {.red_func = reduction_insn_bench_vfredosum, .label = "vfredosum.vs;lmul=" str(LMUL)}, // ordered sum
     };
 
 #   ifndef VERBOSE
@@ -85,6 +116,7 @@ int synthetic_bench() {
 #   endif
 
     int32_t* inputVec = (int32_t*) malloc(vlmax * sizeof(int32_t)); // allocate space for the vector
+    for (int i = 0; i <= vlmax; i++) inputVec[i] = 0x3f800017 + (i << 8) + (i % 3) + ((1u % 2) << 31) + ((i % 5) << 25);
     uint32_t start = 0, stop = 0;
 
     for (int vl = 0; vl <= vlmax; ++vl) {
@@ -93,15 +125,16 @@ int synthetic_bench() {
             int32_t result = benchmarks[bench_id].red_func(inputVec, vl); // call the reduction function
             stop = read_perf_counter();
 
-            uint32_t delay = stop - start;
+	    // dividing by 30 because we run each instruction 30 time
+            float delay = (stop - start) / 30.f;
             float throughput = (double) delay / vl; 
 
             // full message
     #       ifdef VERBOSE
-            printf("reduction(vector[%lu]) = %"PRIi32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
+            printf("reduction(vector[%lu]) = %"PRIi32" (%s)      in %.2f " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
                 vl, result, benchmarks[bench_id].label, delay, throughput);
     #       else
-            printf("%8lu, %8"PRIx32", %s, %u\n", vl, result, benchmarks[bench_id].label, delay);
+            printf("%8lu, %8"PRIx32", %s, %.2f\n", vl, result, benchmarks[bench_id].label, delay);
     #       endif
         }
     }
@@ -421,9 +454,9 @@ int bench_float_reduction(void) {
 int main(void) {
     int error = 0;
     
-    error |= bench_int_reduction();
+    // error |= bench_int_reduction();
 
-    error |= bench_float_reduction();
+    // error |= bench_float_reduction();
 
     error |= synthetic_bench();
 
