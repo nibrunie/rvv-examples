@@ -48,7 +48,7 @@ __attribute__((noinline)) int32_t reduction_insn_bench_ ## op ## _ ## lmul(int32
         "vmv.x.s %[acc], v16\n" \
         : [avl]"+r"(len), [acc]"+r"(acc), [vec]"+r"(vec) \
         : \
-        : "memory", "a4", "v8", "v16" \
+        : "a4", "v8", "v16" \
     ); \
     return acc; \
 }
@@ -101,7 +101,7 @@ int synthetic_bench() {
             printf("reduction(vector[%lu]) = %"PRIi32" (%s)      in %u " PERF_METRIC "(s) [%.3f " PERF_METRIC "(s) per Byte]\n",
                 vl, result, benchmarks[bench_id].label, delay, throughput);
     #       else
-            printf("%8lu, %8"PRIi32", %s, %u\n", vl, result, benchmarks[bench_id].label, delay);
+            printf("%8lu, %8"PRIx32", %s, %u\n", vl, result, benchmarks[bench_id].label, delay);
     #       endif
         }
     }
