@@ -24,7 +24,7 @@ typedef __uint128_t uint128_t;
 //
 //   Y <- (Y xor X) o H
 // where 'o' is the Galois Field Multiplication in GF(2^128).
-extern void
+void
 zvkgs_vghsh_vs(
     uint128_t Y[1],  // a0
     uint128_t X[1],  // a1

@@ -563,9 +563,9 @@ static uint128
 vghsh_zvkgs(uint128 Y, uint128 X, uint128 H) {
     uint128 res = Y;
     zvkgs_vghsh_vs(
-        &res,   // Y
-        &X,     // X
-        &H      // H
+        (uint128_t*)&res,   // Y
+        (uint128_t*)&X,     // X
+        (uint128_t*)&H      // H
     );
     return res;
 }
