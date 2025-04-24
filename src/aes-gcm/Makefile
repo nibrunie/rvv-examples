@@ -10,10 +10,14 @@ SPIKE ?= spike
 
 build/aes-gcm-test.o:
 	mkdir -p build
-	$(CLANG) -save-temps -c --target=riscv64  -menable-experimental-extensions $(INCLUDE) -march=rv64gcv_zvbc1p0_zvbb1p0_zvbc32e1p0_zvkg_zvkgs1p0_zvkned aes-gcm-test.c $(CFLAGS) -o $@
-	
+	$(CLANG) -c --target=riscv64  -menable-experimental-extensions $(INCLUDE) -march=rv64gcv_zvbc1p0_zvbb1p0_zvbc32e1p0_zvkg_zvkgs1p0_zvkned aes-gcm-test.c $(CFLAGS) -o $@
 
-aes_gcm_test: build/aes-gcm-test.o zvkg.s zvb-ghash.s log.c vlen-bits.s zvkned.s
+build/zvkgs.o: zvkgs.c
+	mkdir -p build
+	$(CLANG) -c --target=riscv64  -menable-experimental-extensions $(INCLUDE) -march=rv64gcv_zvbc1p0_zvbb1p0_zvbc32e1p0_zvkg_zvkgs1p0_zvkned aes-gcm-test.c $(CFLAGS) -o $@
+	
+aes_gcm_test: build/aes-gcm-test.o zvkg.s zvb-ghash.s build/zvkgs.o log.c vlen-bits.s zvkned.s
+	mkdir -p build
 	riscv64-unknown-elf-gcc -DCRC_BE_BITS=$(CRC_BE_BITS) -I../utils -march=rv64gcv_zvkg_zvbc_zvbb_zvkned $^ -o $@ $(CFLAGS)
 
 clean:

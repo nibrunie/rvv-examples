@@ -23,6 +23,7 @@
 #include "vlen-bits.h"
 #include "zvb-ghash.h"
 #include "zvkg.h"
+#include "zvkgs.h"
 #include "zvkned.h"
 
 #include "aes-gcm-test.h"
@@ -536,27 +537,6 @@ run_test_zvb(const struct aes_gcm_test* test, int keylen)
 //
 
 
-static uint128
-vghsh_zvkgs(
-    uint128 Y,
-    const uint128 X,
-    const uint128 H
-)
-{
-    uint128 res = Y;  // Start with Y
-    __asm__ volatile (
-        "vsetivli zero, 4, e32, m4, ta, ma\n" // Set vector length to 4 for 128b block
-        "vle32.v v4, (%[res])\n"        // Load Y into v4 (vghsh will use this as Y)
-        "vle32.v v8, (%[X])\n"         // Load X into v8
-        "vle32.v v12, (%[H])\n"         // Load H into v12
-        "vghsh.vs v4, v8, v12\n"  // Perform GHASH on Y, X, and H
-        "vse32.v v4, (%[res])\n"        // Store the result back to res
-        :
-        : [res] "r" (&res), [X] "r" (&X), [H] "r" (&H) // Input operands: X and H
-        : "v4", "v8", "v12", "memory" // Clobbered registers
-    );
-    return res;
-}
 
 // Returns (Y ^ X) o H
 //
@@ -568,11 +548,24 @@ vghsh_zvkgs(
 static uint128
 vghsh(uint128 Y, uint128 X, uint128 H) {
     uint128 res = Y;
-    // zvkg_vghsh(&res, &X, &H);
-    vghsh_zvkgs(
-        res,   // Y
-        X,     // X
-        H      // H
+    zvkg_vghsh(&res, &X, &H);
+    return res;
+}
+
+// Returns (Y ^ X) o H
+//
+// Taking the arguments by value and returning a new value
+// is done for clarity. A performance oriented implementation
+// may want to use a signature reducing extra copies, e.g.,
+//  static void vghsh(uint128* Y, const uint128* H, const uint128* X);
+//
+static uint128
+vghsh_zvkgs(uint128 Y, uint128 X, uint128 H) {
+    uint128 res = Y;
+    zvkgs_vghsh_vs(
+        &res,   // Y
+        &X,     // X
+        &H      // H
     );
     return res;
 }
@@ -811,6 +804,195 @@ run_test_zvkg(const struct aes_gcm_test* test, int keylen)
     return rc;
 }
 
+
+// Runs the given AES GCM test, using the Zvkgs instructions.
+//
+// The logic is written for clarity and staying fairly close to the GCM
+// specification. A performance-focused implementation would reduce
+// unnecessary copies.
+static int
+run_test_zvkgs(const struct aes_gcm_test* test, int keylen)
+{
+    __attribute__((aligned(16)))
+    uint8_t buf[1024];
+
+    assert(keylen == 128 || keylen == 256);
+    assert(test->ctlen < 1024);
+
+    DLOG("ivlen: %zu", test->ivlen);
+
+    struct expanded_key key;
+    expand_key(&key, test->key, keylen);
+
+    // H = ENC_K(0)
+    const uint128 H = compute_h(&key);
+    dlog_u128("H", H);
+
+    // The ICB is kept constant, used later to construct the authentication
+    // tag. The counter_block used in encryption does not use this ICB value
+    // but its increments.
+    const uint128 ICB = zvkg_initial_counter_block(H, test->iv, test->ivlen);
+    dlog_u128("Y0", ICB);
+
+    uint128 X = {};
+    dlog_u128("X0", X);
+
+    // Start with the Additional Authenticated Data (AAD)
+    {
+        size_t remaining_bytes = test->aadlen;
+        const uint8_t* aad = test->aad;
+
+        // Full blocks, including padding 0s if any.
+        while (remaining_bytes > 0) {
+            uint128 block = {};
+            const size_t len = MIN(16, remaining_bytes);
+            memcpy(&block, aad, len);
+            aad += len;
+            remaining_bytes -= len;
+
+            dlog_u128("AAD block", block);
+            X = vghsh_zvkgs(X, block, H);
+            dlog_u128("AAD Xi+1", X);
+        }
+    }
+
+    // Process the Text (Plain or Cipher)
+    {
+        const uint8_t* xordata = test->encrypt ? test->pt : test->ct;
+
+        uint128 counter_block = ICB;
+        for (size_t i = 0; i < test->ctlen / 16; i++) {
+            increment_counter_block(&counter_block);
+            dlog_u128("Y: ", counter_block);
+
+            encrypt_block(&buf[16 * i], &counter_block, &key);
+            dlog_b16("E(K,Y) _0: ", &buf[16*i]);
+
+            if (!test->encrypt) {
+                X = vghsh_zvkgs(X, *(uint128*)(&xordata[16 * i]), H);
+            }
+            for (size_t j = 0; j < 16; j++) {
+                buf[16 * i + j] ^= xordata[16 * i + j];
+            }
+            if (test->encrypt) {
+                X = vghsh_zvkgs(X, *(uint128*)(&buf[16 * i]), H);
+            }
+            dlog_u128("Tf Xi+1", X);
+        }
+
+        const size_t remaining_bytes = test->ctlen % 16;
+        DLOG("remaining_bytes: %zu", remaining_bytes);
+        if (remaining_bytes != 0) {
+            const size_t buf_offset = test->ctlen - remaining_bytes;
+
+            // buf shall have enough space to fit the extra bytes.
+            increment_counter_block(&counter_block);
+            encrypt_block(&buf[buf_offset], &counter_block, &key);
+
+            uint128 temp = {};
+            if (!test->encrypt) {
+                memcpy(&temp, &xordata[buf_offset], remaining_bytes);
+                X = vghsh_zvkgs(X, temp, H);
+            }
+            for (size_t i = 0; i < remaining_bytes; i++) {
+                buf[buf_offset + i] ^= xordata[buf_offset + i];
+            }
+            if (test->encrypt) {
+                memcpy(&temp, &buf[buf_offset], remaining_bytes);
+                X = vghsh_zvkgs(X, temp, H);
+            }
+            dlog_u128("Tt Xi+1", X);
+        }
+    }
+
+    // "Lengths block", len(AA)_64 || len(C)_64
+    if (test->aadlen != 0 || test->ctlen != 0) {
+        uint128 lengths;
+
+        lengths.dwords[0] = __builtin_bswap64(8 * test->aadlen);
+        lengths.dwords[1] = __builtin_bswap64(8 * test->ctlen);
+        dlog_u128("lengths", lengths);
+        X = vghsh_zvkgs(X, lengths, H);
+        dlog_u128("Len Xi+1", X);
+    }
+
+    // Compute the authentication tag.
+    //  T = MSB(GHASH(H,A,C) xor E(K,Y0))
+    dlog_u128("GHASH(H,A,C)", X);
+
+    uint128 tag;
+    encrypt_block(&tag, &ICB, &key);
+    dlog_u128("E(K,Y0)", tag);
+    tag.dwords[0] ^= X.dwords[0];
+    tag.dwords[1] ^= X.dwords[1];
+    dlog_u128("T (full 128b)", tag);
+
+    // Verify the results against expectations
+    assert(test->taglen <= sizeof(tag));
+
+    // Tag Check
+    int rc = memcmp(&tag, test->tag, test->taglen);
+    rc = (!!rc) != test->expect_fail;
+    if (rc != 0) {
+        printf("\nTag mismatch\n");
+        printf("\noutput:   0x");
+        for (int i = 0; i < test->taglen; i++) {
+            printf("%02x", tag.bytes[i]);
+        }
+        printf("\nexpected: 0x");
+        for (int i = 0; i < test->taglen; i++) {
+            printf("%02x", test->tag[i]);
+        }
+        printf("\n");
+        return rc;
+    }
+
+    // Text Check
+    // The remaining logic checks that the generated text matches the expected
+    // value. We check the 'buf' against the Cipher Text for encryption tests,
+    // against the Plain Text for decryption tests.
+    if (test->pt == NULL) {
+        // No encryption or decryption. AAD is not transformed.
+        // Note that some test vectors have "ctlen > 0" and "pt == NULL",
+        // with expect_fail being true. Hence the check against pt.
+        return 0;
+    }
+
+    if (test->encrypt) {
+        rc = memcmp(buf, test->ct, test->ctlen);
+    } else {
+        rc = memcmp(buf, test->pt, test->ctlen);
+    }
+    if (rc == 0) {
+        return 0;
+    }
+
+    printf("\nText mismatch");
+    printf("\ninput:    0x");
+    for (int i = 0; i < test->ctlen; i++) {
+        if (test->encrypt) {
+            printf("%02x", test->pt[i]);
+        } else {
+            printf("%02x", test->ct[i]);
+        }
+    }
+    printf("\noutput:   0x");
+    for (int i = 0; i < test->ctlen; i++) {
+        printf("%02x", buf[i]);
+    }
+    printf("\nexpected: 0x");
+    for (int i = 0; i < test->ctlen; i++) {
+        if (test->encrypt) {
+            printf("%02x", test->ct[i]);
+        } else {
+            printf("%02x", test->pt[i]);
+        }
+    }
+    printf("\n");
+
+    return rc;
+}
+
 // ----------------------------------------------------------------------
 
 static void
@@ -833,6 +1015,16 @@ run_testcase(
     {
         LOG("--- Running %s (#%zu) test against Zvkg... ", name, test_idx);
         const int rc = run_test_zvkg(test, keylen);
+        if (rc != 0) {
+            printf("Test '%s' (#%zu) failed (%d)\n", name, test_idx, rc);
+            exit(1);
+        }
+        DLOG("Success");
+    }
+
+    {
+        LOG("--- Running %s (#%zu) test against Zvkgs... ", name, test_idx);
+        const int rc = run_test_zvkgs(test, keylen);
         if (rc != 0) {
             printf("Test '%s' (#%zu) failed (%d)\n", name, test_idx, rc);
             exit(1);
