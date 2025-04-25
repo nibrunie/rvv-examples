@@ -49,6 +49,8 @@ uint32_t crcEth32_le_vector_opt(uint32_t crc, unsigned char const *p, size_t len
 
 uint32_t crcEth32_be_vector_zvbc32e(uint32_t crc, unsigned char const *p, size_t len);
 
+uint32_t crcEth32_be_vector_zvbc32e_intrinsics(uint32_t crc, unsigned char const *p, size_t len);
+
 
 typedef struct {
     uint32_t (*crc_func)(uint32_t seed, unsigned char const* p, size_t len);
@@ -80,6 +82,8 @@ int bench_crc(void) {
         {.crc_func = crcEth32_be_vector,         .be = true, .label = "crcEth32_be_vector        "},
         {.crc_func = crcEth32_be_vector_opt,     .be = true, .label = "crcEth32_be_vector_opt    "},
         {.crc_func = crcEth32_be_vector_zvbc32e, .be = true, .label = "crcEth32_be_vector_zvbc32e"},
+
+        {.crc_func = crcEth32_be_vector_zvbc32e_intrinsics, .be = true, .label = "crcEth32_be_vector_zvbc32e_intrinsics"},
 
         // CRC LE variants
         {.crc_func = crcEth32_le_generic,        .be = false, .label = "crcEth32_le_generic       "},
