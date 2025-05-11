@@ -2,13 +2,12 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# The Zvbc32e extension contains vectorized carryless multiply (vclmul, vclmulh).
+# The Zvbc32e extension contains vectorized carryless multiply (vclmul, vclmulh) for
+# multiple element width from 8 to 32-bit wide.
 #
-# Those routines are vector-length (VLEN) agnostic, only requiring
-# that VLEN is a multiple of 32. Smaller VLENs should work when using
-# LMUL>1, but this is not exercised here.
+# Those routines are vector-length (VLEN) agnostic.
 #
-# This code was developed to validate the design of the Zvbc extension, and to
+# This code was developed to validate the design of the Zvbc32e extension, and to
 # understand and demonstrate expected usage patterns.
 #
 # DISCLAIMER OF WARRANTY:
@@ -34,21 +33,21 @@
 # Vector Carryless Multiply routines
 ######################################################################
 
-# zvbc_vclmul_vv
+# zvbc8e_vclmul_vv
 #
-# Takes two vectors of uint32_t elements vs2, vs1 as input,
-# a number of (32 bit) elements 'n', sets destination vector
+# Takes two vectors of uint8_t elements vs2, vs1 as input,
+# a number of (8 bit) elements 'n', sets destination vector
 # to clmul(vs2, vs1)
 #
 # Returns the number of elements processed, which is 'n'.
 #
 # C Signature
-#   extern "C" uint32_t
+#   extern "C" uint8_t
 #   zvbc8e_vclmul_vv(
-#       uint32_t* dest,       // a0
-#       const uint32_t* vs2,  // a1
-#       const uint32_t* vs1,  // a2
-#       size_t n              // a3
+#       uint8_t* dest,       // a0
+#       const uint8_t* vs2,  // a1
+#       const uint8_t* vs1,  // a2
+#       size_t n             // a3
 #  );
 #  a0=dest, a1=vs2, a2 = vs1, a3 = n
 #
@@ -73,18 +72,18 @@ zvbc8e_vclmul_vv:
 
 # zvbc8e_vclmul_vx
 #
-# Takes a vector of uint32_t elements vs2, a uint32_t scalar rs1,
-# and a number of (32 bit) elements 'n' as inputs, sets the destination
+# Takes a vector of uint8_t elements vs2, a uint8_t scalar rs1,
+# and a number of (8 bit) elements 'n' as inputs, sets the destination
 # vector to vclmul(vs2, rs1)
 #
 # Returns the number of elements processed, which is 'n'.
 #
 # C Signature
-#   extern "C" uint32_t
+#   extern "C" uint8_t
 #   zvbc8e_vclmul_vv(
-#       uint32_t* dest,       // a0
-#       const uint32_t* vs2,  // a1
-#       uint32_t rs1,         // a2
+#       uint8_t* dest,       // a0
+#       const uint8_t* vs2,  // a1
+#       uint8_t rs1,         // a2
 #       size_t n              // a3
 #  );
 #  a0=dest, a1=vs2, a2 = vs1, a3 = n
@@ -108,18 +107,18 @@ zvbc8e_vclmul_vx:
 
 # zvbc8e_vclmulh_vv
 #
-# Takes two vectors of uint32_t elements vs2, vs1 as input,
-# a number of (32 bit) elements 'n', sets destination vector
+# Takes two vectors of uint8_t elements vs2, vs1 as input,
+# a number of (8 bit) elements 'n', sets destination vector
 # to clmulh(vs2, vs1)
 #
 # Returns the number of elements processed, which is 'n'.
 #
 # C Signature
-#   extern "C" uint32_t
+#   extern "C" uint8_t
 #   zvbc8e_vclmulh_vv(
-#       uint32_t* dest,       // a0
-#       const uint32_t* vs2,  // a1
-#       const uint32_t* vs1,  // a2
+#       uint8_t* dest,       // a0
+#       const uint8_t* vs2,  // a1
+#       const uint8_t* vs1,  // a2
 #       size_t n              // a3
 #  );
 #  a0=dest, a1=vs2, a2 = vs1, a3 = n
@@ -145,18 +144,18 @@ zvbc8e_vclmulh_vv:
 
 # zvbc8e_vclmulh_vx
 #
-# Takes a vector of uint32_t elements vs2, a uint64_t scalar rs1,
-# and a number of (32 bit) elements 'n' as inputs, sets the destination
+# Takes a vector of uint8_t elements vs2, a uint64_t scalar rs1,
+# and a number of (8 bit) elements 'n' as inputs, sets the destination
 # vector to vclmulh(vs2, rs1)
 #
 # Returns the number of elements processed, which is 'n'.
 #
 # C Signature
-#   extern "C" uint32_t
+#   extern "C" uint8_t
 #   zvbc8e_vclmulh_vv(
-#       uint32_t* dest,       // a0
-#       const uint32_t* vs2,  // a1
-#       uint32_t rs1,         // a2
+#       uint8_t* dest,       // a0
+#       const uint8_t* vs2,  // a1
+#       uint8_t rs1,         // a2
 #       size_t n              // a3
 #  );
 #  a0=dest, a1=vs2, a2 = vs1, a3 = n

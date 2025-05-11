@@ -2,14 +2,14 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# The Zvbc32e extension contains vectorized carryless multiply (vclmul, vclmulh).
+# The Zvbc32e extension contains vectorized carryless multiply (vclmul, vclmulh) for
+# multiple element width from 8 to 32-bit wide.
 #
-# Those routines are vector-length (VLEN) agnostic, only requiring
-# that VLEN is a multiple of 64. Smaller VLENs should work when using
-# LMUL>1, but this is not exercised here.
+# Those routines are vector-length (VLEN) agnostic.
 #
-# This code was developed to validate the design of the Zvbc extension, and to
+# This code was developed to validate the design of the Zvbc32e extension, and to
 # understand and demonstrate expected usage patterns.
+#
 #
 # DISCLAIMER OF WARRANTY:
 #  This code is not intended for use in real cryptographic applications,
