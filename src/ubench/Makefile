@@ -33,7 +33,7 @@ BUILD_DIR ?= $(PWD)/build/
 
 $(BUILD_DIR)/ubench: microbenchmarks.c
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -O2 -march=$(BUILD_ARCH) $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -Wfatal-errors -O2 -march=$(BUILD_ARCH) $^ -lm -o $@
 	$(OBJDUMP) -d $@ > $(BUILD_DIR)/ubench.dump
 
 
