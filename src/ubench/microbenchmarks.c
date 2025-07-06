@@ -200,7 +200,7 @@ BENCH_2OP_VV_VEC_INSN(vfdiv)
 
 /** input dataset for 2-operand integer instructions (up to 64-bit) */
 generated_data_t data_2op_int[] = {
-    {.v={1, 1}, .label="data (small, small) [identical]"},
+    {.v={1, 1}, .label="data (small;small) [identical]"},
     {.v={0xdaadbeef, 0xdaadbeef}, .label="(pos-pos) delta_ldc=0"},
     {.v={0xdaadbeef1337cafe, 3}, .label="(pos-pos) delta_ldc=62"},
     {.v={0xaadbeef1337cafe, 3}, .label="(pos-pos) delta_ldc=58"},
@@ -280,20 +280,20 @@ generated_data_t data_2op_int[] = {
 
 /** input dataset for 2-operand floating-point instruction (double precision) */
 generated_data_t data_2op_fp64[] = {
-    {.v={0x3ff0000000000000ull, 0x3ff0000000000000ull}, .label="data fp64 (1.0, 1.0) [identical]"},
-    {.v={0x3ffcafebebebeef7ull, 0x3ffbebebeef13371ull}, .label="data fp64 (~1.0, ~1.0) [different]"},
-    {.v={0x3ffcafebebebeef7ull, 0x0000000000000000ull}, .label="data fp64 (~1.0, +0) []"},
-    {.v={0x3ffcafebebebeef7ull, 0x8000000000000000ull}, .label="data fp64 (~1.0, -0) []"},
-    {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0, NaN) []"},
+    {.v={0x3ff0000000000000ull, 0x3ff0000000000000ull}, .label="data fp64 (1.0; 1.0) [identical]"},
+    {.v={0x3ffcafebebebeef7ull, 0x3ffbebebeef13371ull}, .label="data fp64 (~1.0; ~1.0) [different]"},
+    {.v={0x3ffcafebebebeef7ull, 0x0000000000000000ull}, .label="data fp64 (~1.0; +0) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x8000000000000000ull}, .label="data fp64 (~1.0; -0) []"},
+    {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0; NaN) []"},
 };
 
 /** input dataset for 2-operand floating-point instruction (sginle precision) */
 generated_data_t data_2op_fp32[] = {
-    {.v={0xffffffff3ff00000ull, 0xffffffff3ff00000ull}, .label="data fp32 (1.0, 1.0) [identical]"},
-    {.v={0xffffffff3ffcafebull, 0xffffffff3ffbebebull}, .label="data fp32 (~1.0, ~1.0) [different]"},
-    {.v={0xffffffff3ffcafebull, 0xffffffff00000000ull}, .label="data fp32 (~1.0, +0) []"},
-    {.v={0xffffffff3ffcafebull, 0xffffffff80000000ull}, .label="data fp32 (~1.0, -0) []"},
-    {.v={0xffffffff3ffcafebull, 0xffffffffffffffffull}, .label="data fp32 (~1.0, NaN) []"},
+    {.v={0xffffffff3ff00000ull, 0xffffffff3ff00000ull}, .label="data fp32 (1.0; 1.0) [identical]"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff3ffbebebull}, .label="data fp32 (~1.0; ~1.0) [different]"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff00000000ull}, .label="data fp32 (~1.0; +0) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff80000000ull}, .label="data fp32 (~1.0; -0) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffffffffffffull}, .label="data fp32 (~1.0; NaN) []"},
 };
 
 /** generic data generator for integer 2-operand instruction
