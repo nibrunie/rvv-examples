@@ -94,65 +94,57 @@ ubench_result_t bench_lat_##op(size_t n) { \
  * a way as to limit the possibilities for the uarch to eliminate them away.
  */
 #define BENCH_LAT_2OP_INSN(op) \
-ubench_result_t bench_lat_##op(size_t n) { \
-    size_t cnt = n / 16; \
+ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
+    size_t cnt = n / 8; \
     long start = read_perf_counter(); \
     asm volatile( \
-        "li t0, 7\n" \
-        "li t2, 0xcafebebe1337beef\n" \
+        "mv t0, %[v1]\n" \
+        "mv t2, %[v0]\n" \
         "mv t1, t2\n" \
     "1:\n" \
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
+	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         "mv t3, t1\n" \
         "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
+	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         "mv t3, t1\n" \
         "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
+        "mv t3, t1\n" \
+        "xor t3, t1, t3\n" \
+	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
         "mv t3, t1\n" \
         "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
         #op " t1, t1, t0\n" \
-        #op " t1, t1, t0\n" \
         "mv t3, t1\n" \
         "xor t3, t1, t3\n" \
 	    "add t1, t2, t1\n"\
-        #op " t1, t1, t0\n" \
-        #op " t1, t1, t0\n" \
-        "mv t3, t1\n" \
-        "xor t3, t1, t3\n" \
-	    "add t1, t2, t1\n"\
-        #op " t1, t1, t0\n" \
-        #op " t1, t1, t0\n" \
-        "mv t3, t1\n" \
-        "xor t3, t1, t3\n" \
-	    "add t1, t2, t1\n"\
-        #op " t1, t1, t0\n" \
-        #op " t1, t1, t0\n" \
-        "mv t3, t1\n" \
-        "xor t3, t1, t3\n" \
-	    "add t1, t2, t1\n"\
-        #op " t1, t1, t0\n" \
         #op " t1, t1, t0\n" \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : \
+    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "t0", "t1", "t2"\
     ); \
     long stop = read_perf_counter(); \
     long delta = stop - start; \
-    cnt = n / 16; \
+    cnt = n / 8; \
     start = read_perf_counter(); \
     asm volatile( \
-        "li t0, 7\n" \
-        "li t1, 0xcafebebe1337beef\n" \
-        "li t2, 0xbeefcafebebe1337\n" \
+        "mv t0, %[v1]\n" \
+        "mv t1, %[v0]\n" \
+        "mv t2, %[v0]\n" \
     "1:\n" \
         "mv t3, t1\n" \
         "xor t3, t1, t3\n" \
@@ -178,7 +170,7 @@ ubench_result_t bench_lat_##op(size_t n) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : \
+    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "t0", "t1", "t2"\
     ); \
     stop = read_perf_counter(); \
@@ -188,6 +180,10 @@ ubench_result_t bench_lat_##op(size_t n) { \
         .elt_per_op = 1, \
         .errors = 0 \
     }; \
+}\
+ubench_result_t bench_lat_##op(size_t n) { \
+    uint64_t data[2] = {3, 0xcafebebe1337beefull}; \
+    return bench_lat_##op##_values(n, data); \
 }\
 
 
@@ -229,7 +225,7 @@ ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v[2]) { \
     }; \
 }\
 ubench_result_t bench_throughput_##op(size_t n) { \
-    uint64_t data[2] = {3, 0xcafebebe1337beefull}; \
+    uint64_t data[2] = {0xcafebebe1337beefull, 7}; \
     return bench_throughput_##op##_values(n, data); \
 }\
 
@@ -312,7 +308,7 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
 #define BENCH_LAT_2OP_FPS_INSN(op) BENCH_LAT_2OP_FP_INSN(op, s, 0xffffffff3fcdbeefull, 0xffffffff4abdcafeull)
 
 #define BENCH_LAT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
-ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, uint64_t v1) { \
+ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 16; \
     long start = read_perf_counter(); \
     asm volatile( \
@@ -339,7 +335,7 @@ ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, ui
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : [v0]"r"(v0), [v1]"r"(v1) \
+    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "ft0", "ft1", "ft2"\
     ); \
     long stop = read_perf_counter(); \
@@ -368,7 +364,8 @@ ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v0, ui
     }; \
 } \
 ubench_result_t bench_lat_##op##_##fmt_suffix(size_t n) { \
-    return bench_lat_##op##_##fmt_suffix##_values(n, init_ft0, init_ft1); \
+    uint64_t v[2] = {init_ft0, init_ft1}; \
+    return bench_lat_##op##_##fmt_suffix##_values(n, v); \
 }
 
 
