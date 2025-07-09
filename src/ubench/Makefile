@@ -26,17 +26,17 @@ SIM_ARCH=rv64gcv_zbb_zba
 SIMULATOR=spike --isa=$(SIM_ARCH)_zicntr_zihpm --varch=vlen:$(VLEN),elen:64 $(PK_PATH)
 # SIMULATOR=qemu-riscv64 -cpu rv64,v=on,vext_spec=v1.0,vlen=128,rvv_ta_all_1s=on
 
-COMMON_INCLUDES = -I./ -I../utils/
-
 INCLUDE_DIR ?= /opt/riscv/riscv64-unknown-elf/include/
 BUILD_DIR ?= $(PWD)/build/
+
+COMMON_INCLUDES = -I./ -I../utils/ -I$(BUILD_DIR)
 
 $(BUILD_DIR)/generated_data_2op_int.h: databench_gen.py
 	python3 $^ > $@
 
 $(BUILD_DIR)/ubench: microbenchmarks.c $(BUILD_DIR)/generated_data_2op_int.h
 	mkdir -p $(BUILD_DIR)
-	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -Wfatal-errors -O2 -march=$(BUILD_ARCH) $^ -lm -o $@
+	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -Wfatal-errors -O2 -march=$(BUILD_ARCH) microbenchmarks.c -lm -o $@
 	$(OBJDUMP) -d $@ > $(BUILD_DIR)/ubench.dump
 
 

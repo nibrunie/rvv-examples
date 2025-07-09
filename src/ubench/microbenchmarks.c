@@ -199,7 +199,7 @@ BENCH_2OP_VV_VEC_INSN(vfdiv)
 
 
 /** input dataset for 2-operand integer instructions (up to 64-bit) */
-#include "generate_data_2op_int.h"
+#include <generated_data_2op_int.h>
 
 /** input dataset for 2-operand floating-point instruction (double precision) */
 generated_data_t data_2op_fp64[] = {
