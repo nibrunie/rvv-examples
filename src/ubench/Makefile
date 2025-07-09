@@ -31,7 +31,10 @@ COMMON_INCLUDES = -I./ -I../utils/
 INCLUDE_DIR ?= /opt/riscv/riscv64-unknown-elf/include/
 BUILD_DIR ?= $(PWD)/build/
 
-$(BUILD_DIR)/ubench: microbenchmarks.c
+$(BUILD_DIR)/generated_data_2op_int.h: databench_gen.py
+	python3 $^ > $@
+
+$(BUILD_DIR)/ubench: microbenchmarks.c $(BUILD_DIR)/generated_data_2op_int.h
 	mkdir -p $(BUILD_DIR)
 	$(RISCVCC) $(EXTRA_CFLAGS) $(COMMON_INCLUDES) -Wfatal-errors -O2 -march=$(BUILD_ARCH) $^ -lm -o $@
 	$(OBJDUMP) -d $@ > $(BUILD_DIR)/ubench.dump
