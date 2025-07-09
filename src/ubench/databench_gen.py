@@ -25,4 +25,21 @@ if __name__ == "__main__":
                     dividend = -dividend if lhsSign else dividend
                     case = testCaseDescriptor(lhsSign, rhsSign, dividend, divisor)
                     print(f"  {case}")
+    lhsSign, rhsSign = False, False
+    divisor = 0x200 # 2^9
+    divisorLDC = int(math.ceil(math.log2(divisor)))
+    divisor = -divisor if rhsSign else divisor
+    for leadingDigitPos in range(divisorLDC, 64 if lhsSign else 65):
+        dividend = (1 << (leadingDigitPos - 1)) | random.randrange(2** (leadingDigitPos - 1))
+        dividend = -dividend if lhsSign else dividend
+        case = testCaseDescriptor(lhsSign, rhsSign, dividend, divisor)
+        print(f"  {case}")
+    divisor = 0x40 # 2^6
+    divisorLDC = int(math.ceil(math.log2(divisor)))
+    divisor = -divisor if rhsSign else divisor
+    for leadingDigitPos in range(divisorLDC, 64 if lhsSign else 65):
+        dividend = (1 << (leadingDigitPos - 1)) | random.randrange(2** (leadingDigitPos - 1))
+        dividend = -dividend if lhsSign else dividend
+        case = testCaseDescriptor(lhsSign, rhsSign, dividend, divisor)
+        print(f"  {case}")
     print("};")
