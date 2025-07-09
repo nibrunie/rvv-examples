@@ -30,9 +30,10 @@ INCLUDE_DIR ?= /opt/riscv/riscv64-unknown-elf/include/
 BUILD_DIR ?= $(PWD)/build/
 
 COMMON_INCLUDES = -I./ -I../utils/ -I$(BUILD_DIR)
+SEED ?= 1337
 
 $(BUILD_DIR)/generated_data_2op_int.h: databench_gen.py
-	python3 $^ > $@
+	python3 $^ --seed=$(SEED) > $@
 
 $(BUILD_DIR)/ubench: microbenchmarks.c $(BUILD_DIR)/generated_data_2op_int.h
 	mkdir -p $(BUILD_DIR)
@@ -44,6 +45,7 @@ sim_ubench: $(BUILD_DIR)/ubench
 	$(SIMULATOR) $^
 
 clean:
-	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/ubench
+	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/ubench $(BUILD_DIR)/ubench.dump
+	rm -f $(BUILD_DIR)/generated_data_2op_int.h
 
 .PHONY: sim_ubench clean

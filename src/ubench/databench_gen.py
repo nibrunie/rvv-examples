@@ -1,5 +1,6 @@
 import math
 import random
+import argparse
 
 
 def testCaseDescriptor(lhsSign, rhsSign, dividend, divisor):
@@ -7,15 +8,21 @@ def testCaseDescriptor(lhsSign, rhsSign, dividend, divisor):
      case = f"{{.v={{{hex(dividend)}ull, {hex(divisor)}ull}}, .label=\"{desc}\"}},"
      return case
 
-print("generated_data_t data_2op_int[] = {")
-for lhsSign in [False, True]:
-    for rhsSign in [False, True]:
-        for divisor in [3, 0xcafe, 0xdeadbeef]:
-            divisorLDC = int(math.ceil(math.log2(divisor)))
-            divisor = -divisor if rhsSign else divisor
-            for leadingDigitPos in range(divisorLDC, 64 if lhsSign else 65):
-                dividend = (1 << (leadingDigitPos - 1)) | random.randrange(2** (leadingDigitPos - 1))
-                dividend = -dividend if lhsSign else dividend
-                case = testCaseDescriptor(lhsSign, rhsSign, dividend, divisor)
-                print(f"  {case}")
-print("};")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate test cases for 2-operand integer operations.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    args = parser.parse_args()
+    
+    random.seed(args.seed)
+    print("generated_data_t data_2op_int[] = {")
+    for lhsSign in [False, True]:
+        for rhsSign in [False, True]:
+            for divisor in [3, 0xcafe, 0xdeadbeef]:
+                divisorLDC = int(math.ceil(math.log2(divisor)))
+                divisor = -divisor if rhsSign else divisor
+                for leadingDigitPos in range(divisorLDC, 64 if lhsSign else 65):
+                    dividend = (1 << (leadingDigitPos - 1)) | random.randrange(2** (leadingDigitPos - 1))
+                    dividend = -dividend if lhsSign else dividend
+                    case = testCaseDescriptor(lhsSign, rhsSign, dividend, divisor)
+                    print(f"  {case}")
+    print("};")
