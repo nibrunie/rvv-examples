@@ -96,6 +96,8 @@ ubench_result_t bench_lat_##op(size_t n) { \
 #define BENCH_LAT_2OP_INSN(op) \
 __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 8; \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
     long start = read_perf_counter(); \
     uint64_t v0 = v[0], v1 = v[1]; \
     asm volatile( \
@@ -138,10 +140,12 @@ __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint
     : [v0]"r"(v0), [v1]"r"(v1) \
     : "t0", "t1", "t2", "t3" \
     ); \
+    perf_count_stop(fd); \
     long stop = read_perf_counter(); \
     long delta = stop - start; \
     assert(delta > 0); \
     cnt = n / 8; \
+    perf_count_start(fd); \
     start = read_perf_counter(); \
     asm volatile( \
         "mv t0, %[v1]\n" \
@@ -175,9 +179,11 @@ __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint
     : [v0]"r"(v0), [v1]"r"(v1) \
     : "t0", "t1", "t2", "t3" \
     ); \
+    perf_count_stop(fd); \
     stop = read_perf_counter(); \
     long correction = (stop - start); \
     assert(correction > 0); \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
         .elt_per_op = 1, \
