@@ -94,9 +94,10 @@ ubench_result_t bench_lat_##op(size_t n) { \
  * a way as to limit the possibilities for the uarch to eliminate them away.
  */
 #define BENCH_LAT_2OP_INSN(op) \
-ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
+__attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 8; \
     long start = read_perf_counter(); \
+    uint64_t v0 = v[0], v1 = v[1]; \
     asm volatile( \
         "mv t0, %[v1]\n" \
         "mv t2, %[v0]\n" \
@@ -134,11 +135,12 @@ ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
-    : "t0", "t1", "t2"\
+    : [v0]"r"(v0), [v1]"r"(v1) \
+    : "t0", "t1", "t2", "t3" \
     ); \
     long stop = read_perf_counter(); \
     long delta = stop - start; \
+    assert(delta > 0); \
     cnt = n / 8; \
     start = read_perf_counter(); \
     asm volatile( \
@@ -170,11 +172,12 @@ ubench_result_t bench_lat_##op##_values(size_t n, uint64_t v[2]) { \
         "addi %[cnt], %[cnt], -1\n" \
         "bnez %[cnt], 1b\n" \
     : [cnt]"+r"(cnt) \
-    : [v0]"r"(v[0]), [v1]"r"(v[1]) \
-    : "t0", "t1", "t2"\
+    : [v0]"r"(v0), [v1]"r"(v1) \
+    : "t0", "t1", "t2", "t3" \
     ); \
     stop = read_perf_counter(); \
     long correction = (stop - start); \
+    assert(correction > 0); \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
         .elt_per_op = 1, \

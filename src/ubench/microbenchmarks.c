@@ -304,6 +304,8 @@ void my_memcpy(void* dst, void* src, size_t nBytes) {
 int main(void) {
     int i;
     ubench_t benchmarks[] = {
+
+#ifdef OTHER_BENCHMARKS
         (ubench_t){.bench = baseline_bench,  .label="baseline benchmark"},
         BENCH_LAT_INSN_TC(nop),
         BENCH_LAT_INSN_TC(add),
@@ -382,6 +384,9 @@ int main(void) {
         BENCH_THROUGHPUT_INSN_TC(fsub_s),
         BENCH_THROUGHPUT_INSN_TC(fdiv_s),
         BENCH_THROUGHPUT_INSN_TC(fmul_s),
+
+#endif // ifdef OTHER_BENCHMARKS
+
     };
 
     // list of buffer sizes for memory copy throughput benchmark
@@ -451,6 +456,9 @@ int main(void) {
     ubench_data_t data_benchmarks[] = {
         (ubench_data_t){.bench = bench_lat_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark", .index=0 },
 
+#ifdef OTHER_BENCHMARKS
+        (ubench_data_t){.bench = bench_lat_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark", .index=0 },
+
         (ubench_data_t){.bench = bench_lat_rem_values, .data_gen=data_gen_2op_int, .label="data rem benchmark", .index=0 },
 
         (ubench_data_t){.bench = bench_lat_divu_values, .data_gen=data_gen_2op_int, .label="data divu benchmark", .index=0 },
@@ -460,6 +468,7 @@ int main(void) {
         (ubench_data_t){.bench = bench_lat_fdiv_d_values, .data_gen=data_gen_2op_fp64, .label="data fdiv benchmark", .index=0 },
 
         (ubench_data_t){.bench = bench_lat_fdiv_s_values, .data_gen=data_gen_2op_fp32, .label="data fdiv benchmark", .index=0 },
+#endif
     };
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
@@ -523,6 +532,7 @@ int main(void) {
     size_t maxSize = 0;
     for (size_t testId = 0; testId < sizeof(memCopySizes) / sizeof(size_t); testId++) maxSize = maxSize < memCopySizes[testId] ? memCopySizes[testId] : maxSize;
 
+#ifdef OTHER_BENCHMARKS
     char* memSrc = (char*) malloc(maxSize);
     char* memDst = (char*) malloc(maxSize);
     for (int i = 0; i < maxSize; i++) memSrc[i] = rand();
@@ -549,6 +559,9 @@ int main(void) {
         printf("memcpy %zu %.3f %.3f\n", localSize, delta, localSize / delta);
 
     }
+    free(memSrc);
+    free(memDst);
+#endif
 
     return 0;
 }
