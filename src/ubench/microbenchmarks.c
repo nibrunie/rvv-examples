@@ -20,7 +20,9 @@ ubench_result_t baseline_bench(size_t n);
 
 
 ubench_result_t baseline_bench(size_t n) {
-    long start = read_perf_counter();
+    int fd = perf_count_init();
+    perf_count_start(fd);
+    long start = read_perf_counter(fd);
     for (int i = 0; i < n / 16; i++) {
         asm volatile(
             "nop\n"
@@ -45,7 +47,9 @@ ubench_result_t baseline_bench(size_t n) {
         );
         // do nothing
     }
-    long stop = read_perf_counter();
+    perf_count_stop(fd);
+    long stop = read_perf_counter(fd);
+    perf_count_cleanup(fd);
     return (ubench_result_t){
         .perf_count = (stop - start),
         .elt_per_op = 1,

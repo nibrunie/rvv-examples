@@ -51,7 +51,9 @@ typedef struct {
 
 #define BENCH_0OP_INSN(op) \
 ubench_result_t bench_lat_##op(size_t n) { \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     for (int i = 0; i < n / 16; i++) { \
         asm volatile( \
             #op "\n" \
@@ -75,7 +77,9 @@ ubench_result_t bench_lat_##op(size_t n) { \
         : \
         ); \
     } \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (stop - start), \
         .elt_per_op = 1, \
@@ -98,7 +102,7 @@ __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint
     size_t cnt = n / 8; \
     int fd = perf_count_init(); \
     perf_count_start(fd); \
-    long start = read_perf_counter(); \
+    long start = read_perf_counter(fd); \
     uint64_t v0 = v[0], v1 = v[1]; \
     asm volatile( \
         "mv t0, %[v1]\n" \
@@ -141,12 +145,12 @@ __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint
     : "t0", "t1", "t2", "t3" \
     ); \
     perf_count_stop(fd); \
-    long stop = read_perf_counter(); \
+    long stop = read_perf_counter(fd); \
     long delta = stop - start; \
     assert(delta > 0); \
     cnt = n / 8; \
     perf_count_start(fd); \
-    start = read_perf_counter(); \
+    start = read_perf_counter(fd); \
     asm volatile( \
         "mv t0, %[v1]\n" \
         "mv t1, %[v0]\n" \
@@ -180,7 +184,7 @@ __attribute__((noinline)) ubench_result_t bench_lat_##op##_values(size_t n, uint
     : "t0", "t1", "t2", "t3" \
     ); \
     perf_count_stop(fd); \
-    stop = read_perf_counter(); \
+    stop = read_perf_counter(fd); \
     long correction = (stop - start); \
     assert(correction > 0); \
     perf_count_cleanup(fd); \
@@ -198,7 +202,9 @@ ubench_result_t bench_lat_##op(size_t n) { \
 
 #define BENCH_THROUGHPUT_2OP_INSN(op) \
 ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v[2]) { \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     size_t cnt = n / 13; \
     asm volatile( \
         "mv a0, %[v0]\n" \
@@ -226,7 +232,9 @@ ubench_result_t bench_throughput_##op##_values(size_t n, uint64_t v[2]) { \
       "t0", "t1", "t2", "t3", "t4", \
       "t5", "t6" \
     ); \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (stop - start), \
         .elt_per_op = 1, \
@@ -250,7 +258,9 @@ ubench_result_t bench_throughput_##op(size_t n) { \
 #define BENCH_THROUGHPUT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
 ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 13; \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     asm volatile( \
         "fmv." #fmt_suffix ".x fa0, %[v0]\n" \
         "fmv." #fmt_suffix ".x fa1, %[v1]\n" \
@@ -277,10 +287,12 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t
       "ft0", "ft1", "ft2", "ft3", "ft4", \
       "ft5", "ft6" \
     ); \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
     cnt = n / 13; \
     long delta = stop - start; \
-    start = read_perf_counter(); \
+    perf_count_start(fd); \
+    start = read_perf_counter(fd); \
     asm volatile( \
         "li t0, 0x3fcdbeef3fcdbeef\n" \
         "li t1, 0x4abdcafe4abdcafe\n" \
@@ -296,7 +308,9 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix##_values(size_t n, uint64_t
       "ft0", "ft1", "ft2", "ft3", "ft4", \
       "ft5", "ft6" \
     ); \
-    stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    stop = read_perf_counter(fd); \
+    perf_count_cleanup(fd); \
     long correction = stop - start; \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
@@ -319,7 +333,9 @@ ubench_result_t bench_throughput_##op##_##fmt_suffix(size_t n) { \
 #define BENCH_LAT_2OP_FP_INSN(op, fmt_suffix, init_ft0, init_ft1) \
 ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) { \
     size_t cnt = n / 16; \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     asm volatile( \
         "fmv." #fmt_suffix ".x ft0, %[v0]\n" \
         "fmv." #fmt_suffix ".x ft1, %[v1]\n" \
@@ -347,10 +363,12 @@ ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) 
     : [v0]"r"(v[0]), [v1]"r"(v[1]) \
     : "ft0", "ft1", "ft2"\
     ); \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
     long delta = stop - start; \
     cnt = n / 16; \
-    start = read_perf_counter(); \
+    perf_count_start(fd); \
+    start = read_perf_counter(fd); \
     asm volatile( \
         "li t0, 0x3fcdbeef3fcdbeef\n" \
         "li t2, 0x4abdcafe4abdcafe\n" \
@@ -364,8 +382,10 @@ ubench_result_t bench_lat_##op##_##fmt_suffix##_values(size_t n, uint64_t v[2]) 
     : \
     : \
     ); \
-    stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    stop = read_perf_counter(fd); \
     long correction = (stop - start); \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
         .elt_per_op = 1, \
@@ -387,7 +407,9 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     size_t avl = 65536; \
     size_t cnt = n / 16; \
     size_t vl = 0; \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     asm volatile( \
         "vsetvli t0, x0, e32, m" #LMUL ", ta, ma\n" \
         "li t0, 0x3c003c00\n" \
@@ -420,10 +442,12 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     : \
     : "t0" \
     ); \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
     long delta = stop - start; \
     cnt = n / 16; \
-    start = read_perf_counter(); \
+    perf_count_start(fd); \
+    start = read_perf_counter(fd); \
     asm volatile( \
         "vsetvli t0, x0, e" #elt ", m" #LMUL ", ta, ma\n" \
         "vid.v v16\n" \
@@ -435,8 +459,10 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     : \
     : \
     ); \
-    stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    stop = read_perf_counter(fd); \
     long correction = stop - start; \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
         .elt_per_op = vl, \
@@ -452,7 +478,9 @@ ubench_result_t bench_lat_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
 ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { \
     size_t cnt = n / 18; \
     size_t vl = 0; \
-    long start = read_perf_counter(); \
+    int fd = perf_count_init(); \
+    perf_count_start(fd); \
+    long start = read_perf_counter(fd); \
     asm volatile( \
         "vsetvli t0, x0, e32, m" #LMUL ", ta, ma\n" \
         "li t0, 0x3c003c00\n" \
@@ -487,10 +515,12 @@ ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { 
     : \
     : "t0" \
     ); \
-    long stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    long stop = read_perf_counter(fd); \
     long delta = stop - start; \
     cnt = n / 16; \
-    start = read_perf_counter(); \
+    perf_count_start(fd); \
+    start = read_perf_counter(fd); \
     asm volatile( \
         "vsetvli t0, x0, e" #elt ", m" #LMUL ", ta, ma\n" \
         "vid.v v16\n" \
@@ -502,8 +532,10 @@ ubench_result_t bench_throughput_##op##_m##LMUL##_e##elt##_##suffix(size_t n) { 
     : \
     : \
     ); \
-    stop = read_perf_counter(); \
+    perf_count_stop(fd); \
+    stop = read_perf_counter(fd); \
     long correction = stop - start; \
+    perf_count_cleanup(fd); \
     return (ubench_result_t){ \
         .perf_count = (delta - correction), \
         .elt_per_op = vl, \
