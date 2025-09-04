@@ -212,15 +212,39 @@ generated_data_t data_2op_fp64[] = {
     {.v={0x3ffcafebebebeef7ull, 0x0000000000000000ull}, .label="data fp64 (~1.0; +0) []"},
     {.v={0x3ffcafebebebeef7ull, 0x8000000000000000ull}, .label="data fp64 (~1.0; -0) []"},
     {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0; NaN) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x7ff0000000000000ull}, .label="data fp64 (~1.0; inf) []"},
+    {.v={0x7ff0000000000000ull, 0x3ffcafebebebeef7ull}, .label="data fp64 (inf; ~1.0) []"},
 };
 
-/** input dataset for 2-operand floating-point instruction (sginle precision) */
+/** input dataset for 2-operand floating-point instruction (single precision) */
 generated_data_t data_2op_fp32[] = {
     {.v={0xffffffff3ff00000ull, 0xffffffff3ff00000ull}, .label="data fp32 (1.0; 1.0) [identical]"},
     {.v={0xffffffff3ffcafebull, 0xffffffff3ffbebebull}, .label="data fp32 (~1.0; ~1.0) [different]"},
     {.v={0xffffffff3ffcafebull, 0xffffffff00000000ull}, .label="data fp32 (~1.0; +0) []"},
     {.v={0xffffffff3ffcafebull, 0xffffffff80000000ull}, .label="data fp32 (~1.0; -0) []"},
     {.v={0xffffffff3ffcafebull, 0xffffffffffffffffull}, .label="data fp32 (~1.0; NaN) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff7f800000ull}, .label="data fp32 (~1.0; inf) []"},
+    {.v={0xffffffff7f800000ull, 0xffffffff3ffcafebull}, .label="data fp32 (inf; ~1.0) []"},
+};
+
+/** input dataset for 1-operand floating-point instruction (double precision) */
+generated_data_t data_1op_fp64[] = {
+    {.v={0x3ff0000000000000ull}, .label="data fp64 (1.0) []"},
+    {.v={0x3ffbebebeef13371ull}, .label="data fp64 (~1.0) []"},
+    {.v={0x0000000000000000ull}, .label="data fp64 (+0) []"},
+    {.v={0x8000000000000000ull}, .label="data fp64 (-0) []"},
+    {.v={0xffffffffffffffffull}, .label="data fp64 (NaN) []"},
+    {.v={0x7ff0000000000000ull}, .label="data fp64 (inf) []"},
+};
+
+/** input dataset for 1-operand floating-point instruction (single precision) */
+generated_data_t data_1op_fp32[] = {
+    {.v={0xffffffff3ff00000ull}, .label="data fp32 (1.0) []"},
+    {.v={0xffffffff3ffbebebull}, .label="data fp32 (~1.0) []"},
+    {.v={0xffffffff00000000ull}, .label="data fp32 (+0) []"},
+    {.v={0xffffffff80000000ull}, .label="data fp32 (-0) []"},
+    {.v={0xffffffffffffffffull}, .label="data fp32 (NaN) []"},
+    {.v={0xffffffff7f800000ull}, .label="data fp32 (inf) []"},
 };
 
 /** generic data generator for integer 2-operand instruction
@@ -253,6 +277,24 @@ generated_data_t data_gen_2op_fp32(int* invalid, int index) {
         return data_2op_fp32[index];
     }
     return data_2op_fp32[0];
+}
+
+/** generic data generator for floating-point 1-operand instruction (double precision) */
+generated_data_t data_gen_1op_fp64(int* invalid, int index) {
+    *invalid = index >= (sizeof(data_1op_fp64) / sizeof(generated_data_t));
+    if (!(*invalid)) {
+        return data_1op_fp64[index];
+    }
+    return data_1op_fp64[0];
+}
+
+/** generic data generator for floating-point 1-operand instruction (single precision) */
+generated_data_t data_gen_1op_fp32(int* invalid, int index) {
+    *invalid = index >= (sizeof(data_1op_fp32) / sizeof(generated_data_t));
+    if (!(*invalid)) {
+        return data_1op_fp32[index];
+    }
+    return data_1op_fp32[0];
 }
 
 #ifndef MEMCPY_LMUL
@@ -459,6 +501,7 @@ int main(void) {
     // data dependent benchmarking
     ubench_data_t data_benchmarks[] = {
         (ubench_data_t){.bench = bench_lat_fdiv_d_values, .data_gen=data_gen_2op_fp64, .label="data fdiv benchmark", .index=0 },
+        (ubench_data_t){.bench = bench_lat_fdiv_s_values, .data_gen=data_gen_2op_fp32, .label="data fdiv benchmark", .index=0 },
 
 #ifdef OTHER_BENCHMARKS
         (ubench_data_t){.bench = bench_lat_div_values, .data_gen=data_gen_2op_int, .label="data div benchmark", .index=0 },
@@ -472,7 +515,6 @@ int main(void) {
         (ubench_data_t){.bench = bench_lat_remu_values, .data_gen=data_gen_2op_int, .label="data remu benchmark", .index=0 },
 
 
-        (ubench_data_t){.bench = bench_lat_fdiv_s_values, .data_gen=data_gen_2op_fp32, .label="data fdiv benchmark", .index=0 },
 #endif
     };
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
