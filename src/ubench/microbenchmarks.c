@@ -214,6 +214,15 @@ generated_data_t data_2op_fp64[] = {
     {.v={0x3ffcafebebebeef7ull, 0xffffffffffffffffull}, .label="data fp64 (~1.0; NaN) []"},
     {.v={0x3ffcafebebebeef7ull, 0x7ff0000000000000ull}, .label="data fp64 (~1.0; inf) []"},
     {.v={0x7ff0000000000000ull, 0x3ffcafebebebeef7ull}, .label="data fp64 (inf; ~1.0) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x0008000000000000ull}, .label="data fp64 (~1.0; subnormal) []"},
+    {.v={0x0008000000000000ull, 0x3ffcafebebebeef7ull}, .label="data fp64 (subnormal; ~1.0) []"},
+    {.v={0x0008000000000000ull, 0x0004000000000000ull}, .label="data fp64 (subnormal; subnormal) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x0000000000000001ull}, .label="data fp64 (~1.0; min subnormal) []"},
+    {.v={0x0000000000000001ull, 0x3ffcafebebebeef7ull}, .label="data fp64 (min subnormal; ~1.0) []"},
+    {.v={0x0000000000000001ull, 0x0000000000000001ull}, .label="data fp64 (min subnormal; min subnormal) []"},
+    {.v={0x3ffcafebebebeef7ull, 0x000a5a5a5a5a5a5aull}, .label="data fp64 (~1.0; rand subnormal) []"},
+    {.v={0x000a5a5a5a5a5a5aull, 0x3ffcafebebebeef7ull}, .label="data fp64 (rand subnormal; ~1.0) []"},
+    {.v={0x00031337bebebeefull, 0x000a5a5a5a5a5a5aull}, .label="data fp64 (rand subnormal; rand subnormal) []"},
 };
 
 /** input dataset for 2-operand floating-point instruction (single precision) */
@@ -225,6 +234,15 @@ generated_data_t data_2op_fp32[] = {
     {.v={0xffffffff3ffcafebull, 0xffffffffffffffffull}, .label="data fp32 (~1.0; NaN) []"},
     {.v={0xffffffff3ffcafebull, 0xffffffff7f800000ull}, .label="data fp32 (~1.0; inf) []"},
     {.v={0xffffffff7f800000ull, 0xffffffff3ffcafebull}, .label="data fp32 (inf; ~1.0) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff00400000ull}, .label="data fp32 (~1.0; subnormal) []"},
+    {.v={0xffffffff00400000ull, 0xffffffff3ffcafebull}, .label="data fp32 (subnormal; ~1.0) []"},
+    {.v={0xffffffff00400000ull, 0xffffffff00200000ull}, .label="data fp32 (subnormal; subnormal) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff00000001ull}, .label="data fp32 (~1.0; min subnormal) []"},
+    {.v={0xffffffff00000001ull, 0xffffffff3ffcafebull}, .label="data fp32 (min subnormal; ~1.0) []"},
+    {.v={0xffffffff00000001ull, 0xffffffff00000001ull}, .label="data fp32 (min subnormal; min subnormal) []"},
+    {.v={0xffffffff3ffcafebull, 0xffffffff002a3b4cull}, .label="data fp32 (~1.0; rand subnormal) []"},
+    {.v={0xffffffff002a3b4cull, 0xffffffff3ffcafebull}, .label="data fp32 (rand subnormal; ~1.0) []"},
+    {.v={0xffffffff001337abull, 0xffffffff002a3b4cull}, .label="data fp32 (rand subnormal; rand subnormal) []"},
 };
 
 /** input dataset for 1-operand floating-point instruction (double precision) */
@@ -235,6 +253,9 @@ generated_data_t data_1op_fp64[] = {
     {.v={0x8000000000000000ull}, .label="data fp64 (-0) []"},
     {.v={0xffffffffffffffffull}, .label="data fp64 (NaN) []"},
     {.v={0x7ff0000000000000ull}, .label="data fp64 (inf) []"},
+    {.v={0x0008000000000000ull}, .label="data fp64 (subnormal) []"},
+    {.v={0x0000000000000001ull}, .label="data fp64 (min subnormal) []"},
+    {.v={0x000a5a5a5a5a5a5aull}, .label="data fp64 (rand subnormal) []"},
 };
 
 /** input dataset for 1-operand floating-point instruction (single precision) */
@@ -245,6 +266,9 @@ generated_data_t data_1op_fp32[] = {
     {.v={0xffffffff80000000ull}, .label="data fp32 (-0) []"},
     {.v={0xffffffffffffffffull}, .label="data fp32 (NaN) []"},
     {.v={0xffffffff7f800000ull}, .label="data fp32 (inf) []"},
+    {.v={0xffffffff00400000ull}, .label="data fp32 (subnormal) []"},
+    {.v={0xffffffff00000001ull}, .label="data fp32 (min subnormal) []"},
+    {.v={0xffffffff002a3b4cull}, .label="data fp32 (rand subnormal) []"},
 };
 
 /** generic data generator for integer 2-operand instruction
